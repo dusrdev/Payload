@@ -45,6 +45,30 @@ public class GeneratePayloadPackageAssetsTaskTests
     }
 
     [Test]
+    public async Task Execute_Preserves_Parent_CopyOnBuild_Metadata_In_Generated_Targets()
+    {
+        using var temp = new TemporaryDirectory();
+        var filePath = Path.Combine(temp.Path, "content", "README.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+        await File.WriteAllTextAsync(filePath, "hello");
+
+        var engine = new RecordingBuildEngine();
+        var task = new GeneratePayloadPackageAssetsTask
+        {
+            BuildEngine = engine,
+            PackageId = "ParentPackage",
+            OutputPath = Path.Combine(temp.Path, "obj"),
+            PayloadContentItems =
+            [
+                TestTaskItem.Create(filePath, ("Tag", "OptionalDocs"), ("TargetPath", "docs/README.md"), ("CopyOnBuild", "false"))
+            ]
+        };
+
+        await Assert.That(task.Execute()).IsTrue();
+        await Assert.That(await File.ReadAllTextAsync(task.GeneratedTargetsFile)).Contains("<CopyOnBuild>false</CopyOnBuild>");
+    }
+
+    [Test]
     public async Task Execute_Reuses_Existing_Targets_File_When_Content_Does_Not_Change()
     {
         using var temp = new TemporaryDirectory();

@@ -67,7 +67,12 @@ public sealed class CopyRepoContentTask : Microsoft.Build.Utilities.Task
                     continue;
                 }
 
-                if (!policies.ShouldCopyOnBuild(packageId, tag))
+                if (!TryResolveCopyOnBuild(item, packageId, tag, policies, out var shouldCopyOnBuild))
+                {
+                    continue;
+                }
+
+                if (!shouldCopyOnBuild)
                 {
                     Log.LogMessage(MessageImportance.Low, $"RepoContentCopy: '{packageId}' tag '{tag}' has CopyOnBuild='false'. Skipping.");
                     continue;
@@ -160,6 +165,38 @@ public sealed class CopyRepoContentTask : Microsoft.Build.Utilities.Task
         return true;
     }
 
+    private bool TryResolveCopyOnBuild(ITaskItem item, string packageId, string tag, PolicyMap policies, out bool shouldCopyOnBuild)
+    {
+        shouldCopyOnBuild = true;
+
+        var parentCopyOnBuildRaw = item.GetMetadata("CopyOnBuild");
+        var hasConsumerPolicy = policies.TryGetCopyOnBuild(packageId, tag, out var consumerCopyOnBuild, out var rawConsumerCopyOnBuild);
+
+        if (hasConsumerPolicy && consumerCopyOnBuild.HasValue)
+        {
+            shouldCopyOnBuild = consumerCopyOnBuild.Value;
+            return true;
+        }
+
+        if (hasConsumerPolicy && !string.IsNullOrWhiteSpace(rawConsumerCopyOnBuild))
+        {
+            Log.LogWarning($"RepoContentCopy: '{packageId}' tag '{tag}' has unsupported CopyOnBuild value '{rawConsumerCopyOnBuild}' on PayloadPolicy. Supported values are 'true' and 'false'. Ignoring policy value.");
+        }
+
+        if (TryParseCopyOnBuild(parentCopyOnBuildRaw, out var parentCopyOnBuild))
+        {
+            shouldCopyOnBuild = parentCopyOnBuild;
+            return true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(parentCopyOnBuildRaw))
+        {
+            Log.LogWarning($"RepoContentCopy: '{packageId}' tag '{tag}' has unsupported CopyOnBuild value '{parentCopyOnBuildRaw}' on PayloadContent. Supported values are 'true' and 'false'. Defaulting to 'true'.");
+        }
+
+        return true;
+    }
+
     private bool TryResolvePathKind(string packageId, string tag, PathKind? configuredPathKind, string? rawPathKind, out PathKind resolvedPathKind)
     {
         resolvedPathKind = PathKind.Relative;
@@ -177,6 +214,12 @@ public sealed class CopyRepoContentTask : Microsoft.Build.Utilities.Task
 
         Log.LogWarning($"RepoContentCopy: '{packageId}' tag '{tag}' has unsupported PathKind '{rawPathKind}'. Supported values are '{PathKind.Relative}' and '{PathKind.Absolute}'. Skipping.");
         return false;
+    }
+
+    private static bool TryParseCopyOnBuild(string? value, out bool copyOnBuild)
+    {
+        copyOnBuild = false;
+        return !string.IsNullOrWhiteSpace(value) && bool.TryParse(value, out copyOnBuild);
     }
 
     private void CopySingleFile(string sourceFilePath, string destinationPath)

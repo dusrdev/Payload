@@ -59,6 +59,12 @@ Meaning:
 
 If the source is a directory, Payload copies all files beneath it and preserves their relative layout under `TargetPath`.
 
+Parent packages may also declare `CopyOnBuild` on `PayloadContent`.
+
+- omitted means the parent default is `true`
+- `CopyOnBuild="false"` marks the payload as optional by default
+- a consumer may override that default with `PayloadPolicy`
+
 ## Consumer Control with `PayloadPolicy`
 
 Consumers can opt out of specific tags:
@@ -85,6 +91,30 @@ This is intentionally conservative:
 - existing copied files are not deleted
 - missing files are not restored
 - future overwrites stop
+
+`CopyOnBuild` resolution works like this:
+
+1. consumer `PayloadPolicy` value, if specified
+2. otherwise parent `PayloadContent` value, if specified
+3. otherwise `true`
+
+That means a parent package can ship optional payloads by declaring:
+
+```xml
+<PayloadContent Include="content/skills/example-skill">
+  <Tag>ExampleSkill</Tag>
+  <TargetPath>.agents/skills/example-skill</TargetPath>
+  <CopyOnBuild>false</CopyOnBuild>
+</PayloadContent>
+```
+
+and a consumer can opt in explicitly:
+
+```xml
+<PayloadPolicy Include="ParentPackage"
+               Tag="ExampleSkill"
+               CopyOnBuild="true" />
+```
 
 ## Relative and Absolute Destinations
 

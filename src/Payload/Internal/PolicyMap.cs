@@ -27,15 +27,26 @@ internal sealed class PolicyMap
                 continue;
             }
 
-            var copyOnBuild = !bool.TryParse(copyOnBuildRaw, out var parsed) || parsed;
-            map[(packageId, tag)] = new PolicyState(copyOnBuild, TryParsePathKind(pathKind, out var parsedPathKind) ? parsedPathKind : null, pathKind);
+            bool? copyOnBuild = TryParseCopyOnBuild(copyOnBuildRaw, out var parsedCopyOnBuild) ? parsedCopyOnBuild : null;
+            map[(packageId, tag)] = new PolicyState(copyOnBuild, copyOnBuildRaw, TryParsePathKind(pathKind, out var parsedPathKind) ? parsedPathKind : null, pathKind);
         }
 
         return new PolicyMap(map);
     }
 
-    public bool ShouldCopyOnBuild(string packageId, string tag)
-        => !_policyMap.TryGetValue((packageId, tag), out var policy) || policy.CopyOnBuild;
+    public bool TryGetCopyOnBuild(string packageId, string tag, out bool? copyOnBuild, out string? rawCopyOnBuild)
+    {
+        if (_policyMap.TryGetValue((packageId, tag), out var policy))
+        {
+            copyOnBuild = policy.CopyOnBuild;
+            rawCopyOnBuild = policy.RawCopyOnBuild;
+            return true;
+        }
+
+        copyOnBuild = null;
+        rawCopyOnBuild = null;
+        return false;
+    }
 
     public bool TryGetPathKind(string packageId, string tag, out PathKind? pathKind, out string? rawPathKind)
     {
@@ -54,6 +65,12 @@ internal sealed class PolicyMap
     private static bool TryParsePathKind(string? value, out PathKind pathKind)
         => Enum.TryParse(value, ignoreCase: true, out pathKind);
 
+    private static bool TryParseCopyOnBuild(string? value, out bool copyOnBuild)
+    {
+        copyOnBuild = false;
+        return !string.IsNullOrWhiteSpace(value) && bool.TryParse(value, out copyOnBuild);
+    }
+
     private sealed class TupleComparer : IEqualityComparer<(string PackageId, string Tag)>
     {
         public static readonly TupleComparer OrdinalIgnoreCase = new();
@@ -67,5 +84,5 @@ internal sealed class PolicyMap
                ^ StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Tag);
     }
 
-    private sealed record PolicyState(bool CopyOnBuild, PathKind? PathKind, string? RawPathKind);
+    private sealed record PolicyState(bool? CopyOnBuild, string? RawCopyOnBuild, PathKind? PathKind, string? RawPathKind);
 }

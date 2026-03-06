@@ -72,6 +72,7 @@ public sealed class GeneratePayloadPackageAssetsTask : Microsoft.Build.Utilities
                 var item = PayloadContentItems[index];
                 var tag = item.GetMetadata("Tag");
                 var targetPath = item.GetMetadata("TargetPath");
+                var copyOnBuild = item.GetMetadata("CopyOnBuild");
                 var sourcePath = GetSourcePath(item);
 
                 if (string.IsNullOrWhiteSpace(tag))
@@ -92,7 +93,7 @@ public sealed class GeneratePayloadPackageAssetsTask : Microsoft.Build.Utilities
                 {
                     var relativePath = NormalizePath(Path.Combine(index.ToString("D4", CultureInfo.InvariantCulture), Path.GetFileName(sourcePath)));
                     packFiles.Add(CreatePackFile(sourcePath, relativePath));
-                    generatedEntries.Add(new GeneratedEntry(relativePath, tag, targetPath));
+                    generatedEntries.Add(new GeneratedEntry(relativePath, tag, targetPath, copyOnBuild));
                     continue;
                 }
 
@@ -105,7 +106,7 @@ public sealed class GeneratePayloadPackageAssetsTask : Microsoft.Build.Utilities
                         packFiles.Add(CreatePackFile(filePath, childRelativePath));
                     }
 
-                    generatedEntries.Add(new GeneratedEntry(NormalizePath(relativeRoot), tag, targetPath));
+                    generatedEntries.Add(new GeneratedEntry(NormalizePath(relativeRoot), tag, targetPath, copyOnBuild));
                     continue;
                 }
 
@@ -170,6 +171,10 @@ public sealed class GeneratePayloadPackageAssetsTask : Microsoft.Build.Utilities
             builder.AppendLine($"      <PackageId>{Escape(packageId)}</PackageId>");
             builder.AppendLine($"      <Tag>{Escape(entry.Tag)}</Tag>");
             builder.AppendLine($"      <TargetPath>{Escape(entry.TargetPath)}</TargetPath>");
+            if (!string.IsNullOrWhiteSpace(entry.CopyOnBuild))
+            {
+                builder.AppendLine($"      <CopyOnBuild>{Escape(entry.CopyOnBuild!)}</CopyOnBuild>");
+            }
             builder.AppendLine("    </PayloadContent>");
         }
 
@@ -212,5 +217,5 @@ public sealed class GeneratePayloadPackageAssetsTask : Microsoft.Build.Utilities
     private static string Escape(string value)
         => SecurityElement.Escape(value) ?? string.Empty;
 
-    private sealed record GeneratedEntry(string PackageRelativePath, string Tag, string TargetPath);
+    private sealed record GeneratedEntry(string PackageRelativePath, string Tag, string TargetPath, string? CopyOnBuild);
 }

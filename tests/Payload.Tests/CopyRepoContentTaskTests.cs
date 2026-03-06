@@ -81,6 +81,53 @@ public class CopyRepoContentTaskTests
     }
 
     [Test]
+    public async Task Execute_Skips_Tag_When_Parent_CopyOnBuild_Is_False_And_Consumer_Does_Not_Override()
+    {
+        using var temp = new TemporaryDirectory();
+        var sourceFile = Path.Combine(temp.Path, "package", "README.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(sourceFile)!);
+        await File.WriteAllTextAsync(sourceFile, "payload");
+
+        var repoRoot = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repoRoot);
+        var projectDirectory = Path.Combine(repoRoot, "src", "Consumer");
+        Directory.CreateDirectory(projectDirectory);
+
+        var task = CreateTask(projectDirectory, repoRoot,
+        [
+            TestTaskItem.Create(sourceFile, ("PackageId", "ParentPackage"), ("Tag", "Docs"), ("TargetPath", "docs/README.md"), ("CopyOnBuild", "false"))
+        ]);
+
+        await Assert.That(task.Execute()).IsTrue();
+        await Assert.That(File.Exists(Path.Combine(repoRoot, "docs", "README.md"))).IsFalse();
+    }
+
+    [Test]
+    public async Task Execute_Copies_Tag_When_Parent_CopyOnBuild_Is_False_And_Consumer_Overrides_To_True()
+    {
+        using var temp = new TemporaryDirectory();
+        var sourceFile = Path.Combine(temp.Path, "package", "README.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(sourceFile)!);
+        await File.WriteAllTextAsync(sourceFile, "payload");
+
+        var repoRoot = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repoRoot);
+        var projectDirectory = Path.Combine(repoRoot, "src", "Consumer");
+        Directory.CreateDirectory(projectDirectory);
+
+        var task = CreateTask(projectDirectory, repoRoot,
+        [
+            TestTaskItem.Create(sourceFile, ("PackageId", "ParentPackage"), ("Tag", "Docs"), ("TargetPath", "docs/README.md"), ("CopyOnBuild", "false"))
+        ],
+        [
+            TestTaskItem.Create("ParentPackage", ("Tag", "Docs"), ("CopyOnBuild", "true"))
+        ]);
+
+        await Assert.That(task.Execute()).IsTrue();
+        await Assert.That(await File.ReadAllTextAsync(Path.Combine(repoRoot, "docs", "README.md"))).IsEqualTo("payload");
+    }
+
+    [Test]
     public async Task Execute_Does_Not_Overwrite_Existing_File_When_CopyOnBuild_Is_False()
     {
         using var temp = new TemporaryDirectory();
@@ -106,6 +153,71 @@ public class CopyRepoContentTaskTests
 
         await Assert.That(task.Execute()).IsTrue();
         await Assert.That(await File.ReadAllTextAsync(destinationFile)).IsEqualTo("consumer-edit");
+    }
+
+    [Test]
+    public async Task Execute_Warns_And_Defaults_To_True_When_Parent_CopyOnBuild_Is_Invalid()
+    {
+        using var temp = new TemporaryDirectory();
+        var sourceFile = Path.Combine(temp.Path, "package", "README.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(sourceFile)!);
+        await File.WriteAllTextAsync(sourceFile, "payload");
+
+        var repoRoot = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repoRoot);
+        var projectDirectory = Path.Combine(repoRoot, "src", "Consumer");
+        Directory.CreateDirectory(projectDirectory);
+
+        var engine = new RecordingBuildEngine();
+        var task = new CopyRepoContentTask
+        {
+            BuildEngine = engine,
+            ProjectDirectory = projectDirectory,
+            RootDirectory = repoRoot,
+            PayloadContentItems =
+            [
+                TestTaskItem.Create(sourceFile, ("PackageId", "ParentPackage"), ("Tag", "Docs"), ("TargetPath", "docs/README.md"), ("CopyOnBuild", "maybe"))
+            ],
+            PayloadPolicies = []
+        };
+
+        await Assert.That(task.Execute()).IsTrue();
+        await Assert.That(await File.ReadAllTextAsync(Path.Combine(repoRoot, "docs", "README.md"))).IsEqualTo("payload");
+        await Assert.That(engine.Warnings.Any(x => (x.Message ?? string.Empty).Contains("unsupported CopyOnBuild value", StringComparison.OrdinalIgnoreCase))).IsTrue();
+    }
+
+    [Test]
+    public async Task Execute_Warns_And_Uses_Parent_Default_When_Consumer_CopyOnBuild_Is_Invalid()
+    {
+        using var temp = new TemporaryDirectory();
+        var sourceFile = Path.Combine(temp.Path, "package", "README.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(sourceFile)!);
+        await File.WriteAllTextAsync(sourceFile, "payload");
+
+        var repoRoot = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repoRoot);
+        var projectDirectory = Path.Combine(repoRoot, "src", "Consumer");
+        Directory.CreateDirectory(projectDirectory);
+
+        var engine = new RecordingBuildEngine();
+        var task = new CopyRepoContentTask
+        {
+            BuildEngine = engine,
+            ProjectDirectory = projectDirectory,
+            RootDirectory = repoRoot,
+            PayloadContentItems =
+            [
+                TestTaskItem.Create(sourceFile, ("PackageId", "ParentPackage"), ("Tag", "Docs"), ("TargetPath", "docs/README.md"), ("CopyOnBuild", "false"))
+            ],
+            PayloadPolicies =
+            [
+                TestTaskItem.Create("ParentPackage", ("Tag", "Docs"), ("CopyOnBuild", "maybe"))
+            ]
+        };
+
+        await Assert.That(task.Execute()).IsTrue();
+        await Assert.That(File.Exists(Path.Combine(repoRoot, "docs", "README.md"))).IsFalse();
+        await Assert.That(engine.Warnings.Any(x => (x.Message ?? string.Empty).Contains("unsupported CopyOnBuild value", StringComparison.OrdinalIgnoreCase))).IsTrue();
     }
 
     [Test]

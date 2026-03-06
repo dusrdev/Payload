@@ -33,6 +33,7 @@ Parent package authoring item shape:
 - metadata:
   - `Tag`
   - `TargetPath`
+  - `CopyOnBuild`
 
 For authoring in the parent package project, the item `Include` is the local source file or directory.
 
@@ -63,7 +64,7 @@ Tag uniqueness is the responsibility of the parent package author.
 
 ### Copy behavior
 
-When enabled:
+When effective `CopyOnBuild` is `true`:
 
 - if source is a file, copy the file
 - if source is a directory, copy recursively preserving relative structure under `TargetPath`
@@ -71,7 +72,7 @@ When enabled:
 - local edits are not considered a supported customization model
 - while copying remains enabled, local edits may be overwritten
 
-When `CopyOnBuild="false"`:
+When effective `CopyOnBuild` is `false`:
 
 - stop copying for that `PackageId + Tag`
 - do not remove existing copied files
@@ -137,6 +138,12 @@ No automatic removal on disable.
 
 `CopyOnBuild="false"` means only: stop future synchronization.
 
+`CopyOnBuild` resolution order:
+
+1. consumer `PayloadPolicy`, if specified
+2. otherwise parent `PayloadContent`, if specified
+3. otherwise `true`
+
 ### Scope discipline
 
 Do not bloat this into a general deployment engine.
@@ -180,6 +187,7 @@ A parent package that references the shared build package should:
 
 - include its bundled content in the `.nupkg`
 - author `PayloadContent` items in its project
+- use `PayloadContent CopyOnBuild="false"` for optional-by-default payload groups when needed
 - let `Payload` generate the `.targets` file during pack
 - choose stable, package-specific tags such as:
   - `ExampleSkill`
