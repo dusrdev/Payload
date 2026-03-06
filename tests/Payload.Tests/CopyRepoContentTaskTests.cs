@@ -81,6 +81,34 @@ public class CopyRepoContentTaskTests
     }
 
     [Test]
+    public async Task Execute_Does_Not_Overwrite_Existing_File_When_CopyOnBuild_Is_False()
+    {
+        using var temp = new TemporaryDirectory();
+        var sourceFile = Path.Combine(temp.Path, "package", "README.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(sourceFile)!);
+        await File.WriteAllTextAsync(sourceFile, "payload");
+
+        var repoRoot = Path.Combine(temp.Path, "repo");
+        var destinationFile = Path.Combine(repoRoot, "docs", "README.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(destinationFile)!);
+        await File.WriteAllTextAsync(destinationFile, "consumer-edit");
+
+        var projectDirectory = Path.Combine(repoRoot, "src", "Consumer");
+        Directory.CreateDirectory(projectDirectory);
+
+        var task = CreateTask(projectDirectory, repoRoot,
+        [
+            TestTaskItem.Create(sourceFile, ("PackageId", "ParentPackage"), ("Tag", "Docs"), ("TargetPath", "docs/README.md"))
+        ],
+        [
+            TestTaskItem.Create("ParentPackage", ("Tag", "Docs"), ("CopyOnBuild", "false"))
+        ]);
+
+        await Assert.That(task.Execute()).IsTrue();
+        await Assert.That(await File.ReadAllTextAsync(destinationFile)).IsEqualTo("consumer-edit");
+    }
+
+    [Test]
     public async Task Execute_Does_Not_Overwrite_When_Destination_Has_Identical_Content()
     {
         using var temp = new TemporaryDirectory();

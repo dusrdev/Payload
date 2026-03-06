@@ -11,8 +11,8 @@ public class SampleBuildIntegrationTests
         using var workspace = new TestWorkspace();
         var env = CreateEnvironment(workspace);
 
-        var payloadBuild = await DotnetCommand.RunAsync(["build", "src/Payload/Payload.csproj", "-nologo"], workspace.RootPath, env);
-        AssertSucceeded(payloadBuild);
+        var payloadPack = await DotnetCommand.RunAsync(["pack", "src/Payload/Payload.csproj", "-nologo", "-c", "Debug"], workspace.RootPath, env);
+        AssertSucceeded(payloadPack);
 
         var parentBuild = await DotnetCommand.RunAsync(["build", "tests/ParentPackage/ParentPackage.csproj", "-nologo", "-p:RestoreForce=true"], workspace.RootPath, env);
         AssertSucceeded(parentBuild);
@@ -46,7 +46,7 @@ public class SampleBuildIntegrationTests
 
         var env = CreateEnvironment(workspace);
 
-        AssertSucceeded(await DotnetCommand.RunAsync(["build", "src/Payload/Payload.csproj", "-nologo"], workspace.RootPath, env));
+        AssertSucceeded(await DotnetCommand.RunAsync(["pack", "src/Payload/Payload.csproj", "-nologo", "-c", "Debug"], workspace.RootPath, env));
         AssertSucceeded(await DotnetCommand.RunAsync(["build", "tests/ParentPackage/ParentPackage.csproj", "-nologo", "-p:RestoreForce=true"], workspace.RootPath, env));
 
         var consumerBuild = await DotnetCommand.RunAsync(["build", "tests/ConsumerApp/ConsumerApp.csproj", "-nologo", "-p:RestoreForce=true"], workspace.RootPath, env);
@@ -54,6 +54,32 @@ public class SampleBuildIntegrationTests
 
         var copiedSkillPath = Path.Combine(workspace.RootPath, ".agents", "skills", "example-skill", "SKILL.md");
         await Assert.That(File.Exists(copiedSkillPath)).IsFalse();
+    }
+
+    [Test]
+    public async Task Sample_Flow_Does_Not_Restore_Deleted_Content_When_CopyOnBuild_Is_False()
+    {
+        using var workspace = new TestWorkspace();
+        var env = CreateEnvironment(workspace);
+
+        AssertSucceeded(await DotnetCommand.RunAsync(["pack", "src/Payload/Payload.csproj", "-nologo", "-c", "Debug"], workspace.RootPath, env));
+        AssertSucceeded(await DotnetCommand.RunAsync(["build", "tests/ParentPackage/ParentPackage.csproj", "-nologo", "-p:RestoreForce=true"], workspace.RootPath, env));
+        AssertSucceeded(await DotnetCommand.RunAsync(["build", "tests/ConsumerApp/ConsumerApp.csproj", "-nologo", "-p:RestoreForce=true"], workspace.RootPath, env));
+
+        var copiedSkillDirectory = Path.Combine(workspace.RootPath, ".agents", "skills", "example-skill");
+        await Assert.That(Directory.Exists(copiedSkillDirectory)).IsTrue();
+
+        var consumerProjectPath = Path.Combine(workspace.RootPath, "tests", "ConsumerApp", "ConsumerApp.csproj");
+        var consumerProject = await File.ReadAllTextAsync(consumerProjectPath);
+        consumerProject = consumerProject.Replace("CopyOnBuild=\"true\"", "CopyOnBuild=\"false\"", StringComparison.Ordinal);
+        await File.WriteAllTextAsync(consumerProjectPath, consumerProject);
+
+        Directory.Delete(copiedSkillDirectory, recursive: true);
+        await Assert.That(Directory.Exists(copiedSkillDirectory)).IsFalse();
+
+        AssertSucceeded(await DotnetCommand.RunAsync(["build", "tests/ConsumerApp/ConsumerApp.csproj", "-nologo", "-p:RestoreForce=true"], workspace.RootPath, env));
+
+        await Assert.That(Directory.Exists(copiedSkillDirectory)).IsFalse();
     }
 
     private static IReadOnlyDictionary<string, string> CreateEnvironment(TestWorkspace workspace)

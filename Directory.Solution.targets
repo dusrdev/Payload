@@ -2,7 +2,7 @@
   <Target Name="BootstrapSamplePackageFeeds" BeforeTargets="Restore">
     <Exec
       WorkingDirectory="$(MSBuildThisFileDirectory)"
-      Command='dotnet build "src/Payload/Payload.csproj" -nologo -c "$(Configuration)"' />
+      Command='dotnet pack "src/Payload/Payload.csproj" -nologo -c "$(Configuration)"' />
 
     <Exec
       WorkingDirectory="$(MSBuildThisFileDirectory)"
