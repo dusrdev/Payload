@@ -67,9 +67,9 @@ public sealed class CopyRepoContentTask : Microsoft.Build.Utilities.Task
                     continue;
                 }
 
-                if (policies.IsDisabled(packageId, tag))
+                if (!policies.ShouldCopyOnBuild(packageId, tag))
                 {
-                    Log.LogMessage(MessageImportance.Low, $"RepoContentCopy: '{packageId}' tag '{tag}' is disabled. Skipping.");
+                    Log.LogMessage(MessageImportance.Low, $"RepoContentCopy: '{packageId}' tag '{tag}' has CopyOnBuild='false'. Skipping.");
                     continue;
                 }
 

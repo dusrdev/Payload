@@ -43,7 +43,7 @@ Consumer policy item shape:
 - item name: `PayloadPolicy`
 - metadata or attributes:
   - `Tag`
-  - `Disable`
+  - `CopyOnBuild`
   - `PathKind`
 
 The item `Include` is the `PackageId`.
@@ -71,7 +71,7 @@ When enabled:
 - local edits are not considered a supported customization model
 - while copying remains enabled, local edits may be overwritten
 
-When disabled:
+When `CopyOnBuild="false"`:
 
 - stop copying for that `PackageId + Tag`
 - do not remove existing copied files
@@ -135,7 +135,7 @@ No `.gitignore` support in version one.
 
 No automatic removal on disable.
 
-Disable means only: stop future synchronization.
+`CopyOnBuild="false"` means only: stop future synchronization.
 
 ### Scope discipline
 
@@ -192,7 +192,7 @@ A consumer may declare policies such as:
 
 ```xml
 <ItemGroup>
-  <PayloadPolicy Include="ParentPackage" Tag="ExampleSkill" Disable="true" />
+  <PayloadPolicy Include="ParentPackage" Tag="ExampleSkill" CopyOnBuild="false" />
 </ItemGroup>
 ```
 

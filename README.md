@@ -67,7 +67,7 @@ Consumers can opt out of specific tags:
 <ItemGroup>
   <PayloadPolicy Include="ParentPackage"
                  Tag="ExampleSkill"
-                 Disable="true" />
+                 CopyOnBuild="false" />
 </ItemGroup>
 ```
 
@@ -77,10 +77,10 @@ Meaning:
   The package id
 - `Tag`
   The tag declared by the parent package
-- `Disable="true"`
+- `CopyOnBuild="false"`
   Stops future synchronization for that tag
 
-Disable is intentionally conservative:
+This is intentionally conservative:
 
 - existing copied files are not deleted
 - missing files are not restored

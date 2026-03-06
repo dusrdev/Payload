@@ -41,7 +41,7 @@ public class SampleBuildIntegrationTests
         using var workspace = new TestWorkspace();
         var consumerProjectPath = Path.Combine(workspace.RootPath, "tests", "ConsumerApp", "ConsumerApp.csproj");
         var consumerProject = await File.ReadAllTextAsync(consumerProjectPath);
-        consumerProject = consumerProject.Replace("Disable=\"false\"", "Disable=\"true\"", StringComparison.Ordinal);
+        consumerProject = consumerProject.Replace("CopyOnBuild=\"true\"", "CopyOnBuild=\"false\"", StringComparison.Ordinal);
         await File.WriteAllTextAsync(consumerProjectPath, consumerProject);
 
         var env = CreateEnvironment(workspace);

@@ -10,10 +10,10 @@ public class PolicyMapTests
     {
         var map = PolicyMap.Create(
         [
-            TestTaskItem.Create("ParentPackage", ("Tag", "ExampleSkill"), ("Disable", "true"))
+            TestTaskItem.Create("ParentPackage", ("Tag", "ExampleSkill"), ("CopyOnBuild", "false"))
         ]);
 
-        await Assert.That(map.IsDisabled("parentpackage", "exampleskill")).IsTrue();
+        await Assert.That(map.ShouldCopyOnBuild("parentpackage", "exampleskill")).IsFalse();
     }
 
     [Test]
@@ -21,24 +21,24 @@ public class PolicyMapTests
     {
         var map = PolicyMap.Create(
         [
-            TestTaskItem.Create(string.Empty, ("Tag", "Skill"), ("Disable", "true")),
-            TestTaskItem.Create("ParentPackage", ("Disable", "true"))
+            TestTaskItem.Create(string.Empty, ("Tag", "Skill"), ("CopyOnBuild", "false")),
+            TestTaskItem.Create("ParentPackage", ("CopyOnBuild", "false"))
         ]);
 
-        await Assert.That(map.IsDisabled("ParentPackage", "Skill")).IsFalse();
+        await Assert.That(map.ShouldCopyOnBuild("ParentPackage", "Skill")).IsTrue();
     }
 
     [Test]
-    public async Task Create_Treats_Non_True_Disable_As_Enabled()
+    public async Task Create_Defaults_CopyOnBuild_To_True_When_Missing_Or_Invalid()
     {
         var map = PolicyMap.Create(
         [
-            TestTaskItem.Create("ParentPackage", ("Tag", "SkillA"), ("Disable", "false")),
-            TestTaskItem.Create("ParentPackage", ("Tag", "SkillB"), ("Disable", "invalid"))
+            TestTaskItem.Create("ParentPackage", ("Tag", "SkillA"), ("CopyOnBuild", "true")),
+            TestTaskItem.Create("ParentPackage", ("Tag", "SkillB"), ("CopyOnBuild", "invalid"))
         ]);
 
-        await Assert.That(map.IsDisabled("ParentPackage", "SkillA")).IsFalse();
-        await Assert.That(map.IsDisabled("ParentPackage", "SkillB")).IsFalse();
+        await Assert.That(map.ShouldCopyOnBuild("ParentPackage", "SkillA")).IsTrue();
+        await Assert.That(map.ShouldCopyOnBuild("ParentPackage", "SkillB")).IsTrue();
     }
 
     [Test]

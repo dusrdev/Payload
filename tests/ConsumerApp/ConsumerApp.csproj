@@ -11,7 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Toggle to true to stop future synchronization for this tag. Existing files remain. -->
-    <PayloadPolicy Include="ParentPackage" Tag="ExampleSkill" Disable="false" />
+    <!-- Toggle to false to stop future synchronization for this tag. Existing files remain. -->
+    <PayloadPolicy Include="ParentPackage" Tag="ExampleSkill" CopyOnBuild="true" />
   </ItemGroup>
 </Project>

@@ -19,7 +19,7 @@ internal sealed class PolicyMap
         {
             var packageId = item.ItemSpec;
             var tag = item.GetMetadata("Tag");
-            var disableRaw = item.GetMetadata("Disable");
+            var copyOnBuildRaw = item.GetMetadata("CopyOnBuild");
             var pathKind = item.GetMetadata("PathKind");
 
             if (string.IsNullOrWhiteSpace(packageId) || string.IsNullOrWhiteSpace(tag))
@@ -27,15 +27,15 @@ internal sealed class PolicyMap
                 continue;
             }
 
-            var disabled = bool.TryParse(disableRaw, out var parsed) && parsed;
-            map[(packageId, tag)] = new PolicyState(disabled, TryParsePathKind(pathKind, out var parsedPathKind) ? parsedPathKind : null, pathKind);
+            var copyOnBuild = !bool.TryParse(copyOnBuildRaw, out var parsed) || parsed;
+            map[(packageId, tag)] = new PolicyState(copyOnBuild, TryParsePathKind(pathKind, out var parsedPathKind) ? parsedPathKind : null, pathKind);
         }
 
         return new PolicyMap(map);
     }
 
-    public bool IsDisabled(string packageId, string tag)
-        => _policyMap.TryGetValue((packageId, tag), out var policy) && policy.Disabled;
+    public bool ShouldCopyOnBuild(string packageId, string tag)
+        => !_policyMap.TryGetValue((packageId, tag), out var policy) || policy.CopyOnBuild;
 
     public bool TryGetPathKind(string packageId, string tag, out PathKind? pathKind, out string? rawPathKind)
     {
@@ -67,5 +67,5 @@ internal sealed class PolicyMap
                ^ StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Tag);
     }
 
-    private sealed record PolicyState(bool Disabled, PathKind? PathKind, string? RawPathKind);
+    private sealed record PolicyState(bool CopyOnBuild, PathKind? PathKind, string? RawPathKind);
 }

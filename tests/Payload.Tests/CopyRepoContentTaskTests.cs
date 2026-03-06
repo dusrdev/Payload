@@ -56,7 +56,7 @@ public class CopyRepoContentTaskTests
     }
 
     [Test]
-    public async Task Execute_Skips_Disabled_Tag()
+    public async Task Execute_Skips_Tag_When_CopyOnBuild_Is_False()
     {
         using var temp = new TemporaryDirectory();
         var sourceFile = Path.Combine(temp.Path, "package", "README.md");
@@ -73,7 +73,7 @@ public class CopyRepoContentTaskTests
             TestTaskItem.Create(sourceFile, ("PackageId", "ParentPackage"), ("Tag", "Docs"), ("TargetPath", "docs/README.md"))
         ],
         [
-            TestTaskItem.Create("ParentPackage", ("Tag", "Docs"), ("Disable", "true"))
+            TestTaskItem.Create("ParentPackage", ("Tag", "Docs"), ("CopyOnBuild", "false"))
         ]);
 
         await Assert.That(task.Execute()).IsTrue();
