@@ -12,8 +12,8 @@
   <ItemGroup>
     <PayloadContent Include="$(_Payload_ParentPackage_Root)0000">
       <PackageId>ParentPackage</PackageId>
-      <Tag>FluentValidationSkill</Tag>
-      <TargetPath>.agents/skills/fluent-validation-expert</TargetPath>
+      <Tag>ExampleSkill</Tag>
+      <TargetPath>.agents/skills/example-skill</TargetPath>
     </PayloadContent>
   </ItemGroup>
 </Project>

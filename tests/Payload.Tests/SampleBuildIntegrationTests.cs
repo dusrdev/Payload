@@ -31,7 +31,7 @@ public class SampleBuildIntegrationTests
         var consumerBuild = await DotnetCommand.RunAsync(["build", "tests/ConsumerApp/ConsumerApp.csproj", "-nologo", "-p:RestoreForce=true"], workspace.RootPath, env);
         AssertSucceeded(consumerBuild);
 
-        var copiedSkillPath = Path.Combine(workspace.RootPath, ".agents", "skills", "fluent-validation-expert", "SKILL.md");
+        var copiedSkillPath = Path.Combine(workspace.RootPath, ".agents", "skills", "example-skill", "SKILL.md");
         await Assert.That(File.Exists(copiedSkillPath)).IsTrue();
     }
 
@@ -52,7 +52,7 @@ public class SampleBuildIntegrationTests
         var consumerBuild = await DotnetCommand.RunAsync(["build", "tests/ConsumerApp/ConsumerApp.csproj", "-nologo", "-p:RestoreForce=true"], workspace.RootPath, env);
         AssertSucceeded(consumerBuild);
 
-        var copiedSkillPath = Path.Combine(workspace.RootPath, ".agents", "skills", "fluent-validation-expert", "SKILL.md");
+        var copiedSkillPath = Path.Combine(workspace.RootPath, ".agents", "skills", "example-skill", "SKILL.md");
         await Assert.That(File.Exists(copiedSkillPath)).IsFalse();
     }
 

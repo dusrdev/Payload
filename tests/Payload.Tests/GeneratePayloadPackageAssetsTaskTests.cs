@@ -9,7 +9,7 @@ public class GeneratePayloadPackageAssetsTaskTests
     public async Task Execute_Generates_Targets_And_Pack_Files_For_Directory_Content()
     {
         using var temp = new TemporaryDirectory();
-        var contentRoot = Path.Combine(temp.Path, "content", "skills", "fluent-validation-expert");
+        var contentRoot = Path.Combine(temp.Path, "content", "skills", "example-skill");
         Directory.CreateDirectory(contentRoot);
         await File.WriteAllTextAsync(Path.Combine(contentRoot, "SKILL.md"), "# skill");
         await File.WriteAllTextAsync(Path.Combine(contentRoot, "notes.txt"), "notes");
@@ -22,7 +22,7 @@ public class GeneratePayloadPackageAssetsTaskTests
             OutputPath = Path.Combine(temp.Path, "obj"),
             PayloadContentItems =
             [
-                TestTaskItem.Create(contentRoot, ("Tag", "FluentValidationSkill"), ("TargetPath", ".agents/skills/fluent-validation-expert"))
+                TestTaskItem.Create(contentRoot, ("Tag", "ExampleSkill"), ("TargetPath", ".agents/skills/example-skill"))
             ]
         };
 
@@ -86,7 +86,7 @@ public class GeneratePayloadPackageAssetsTaskTests
             OutputPath = Path.Combine(temp.Path, "obj"),
             PayloadContentItems =
             [
-                TestTaskItem.Create(filePath, ("TargetPath", ".agents/skills/fluent-validation-expert"))
+                TestTaskItem.Create(filePath, ("TargetPath", ".agents/skills/example-skill"))
             ]
         };
 

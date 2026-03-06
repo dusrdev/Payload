@@ -10,10 +10,10 @@ public class PolicyMapTests
     {
         var map = PolicyMap.Create(
         [
-            TestTaskItem.Create("ParentPackage", ("Tag", "FluentValidationSkill"), ("Disable", "true"))
+            TestTaskItem.Create("ParentPackage", ("Tag", "ExampleSkill"), ("Disable", "true"))
         ]);
 
-        await Assert.That(map.IsDisabled("parentpackage", "fluentvalidationskill")).IsTrue();
+        await Assert.That(map.IsDisabled("parentpackage", "exampleskill")).IsTrue();
     }
 
     [Test]

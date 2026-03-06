@@ -12,6 +12,6 @@
 
   <ItemGroup>
     <!-- Toggle to true to stop future synchronization for this tag. Existing files remain. -->
-    <PayloadPolicy Include="ParentPackage" Tag="FluentValidationSkill" Disable="false" />
+    <PayloadPolicy Include="ParentPackage" Tag="ExampleSkill" Disable="false" />
   </ItemGroup>
 </Project>

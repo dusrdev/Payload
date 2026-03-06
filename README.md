@@ -53,9 +53,9 @@ Declare one or more `PayloadContent` items:
 
 ```xml
 <ItemGroup>
-  <PayloadContent Include="content/skills/fluent-validation-expert">
-    <Tag>FluentValidationSkill</Tag>
-    <TargetPath>.agents/skills/fluent-validation-expert</TargetPath>
+  <PayloadContent Include="content/skills/example-skill">
+    <Tag>ExampleSkill</Tag>
+    <TargetPath>.agents/skills/example-skill</TargetPath>
   </PayloadContent>
 </ItemGroup>
 ```
@@ -78,7 +78,7 @@ Consumers can opt out of specific tags:
 ```xml
 <ItemGroup>
   <PayloadPolicy Include="ParentPackage"
-                 Tag="FluentValidationSkill"
+                 Tag="ExampleSkill"
                  Disable="true" />
 </ItemGroup>
 ```
@@ -107,7 +107,7 @@ If a consumer wants a specific tag to use an absolute destination instead, they 
 ```xml
 <ItemGroup>
   <PayloadPolicy Include="ParentPackage"
-                 Tag="FluentValidationSkill"
+                 Tag="ExampleSkill"
                  PathKind="Absolute" />
 </ItemGroup>
 ```

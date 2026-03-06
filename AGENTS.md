@@ -182,7 +182,7 @@ A parent package that references the shared build package should:
 - author `PayloadContent` items in its project
 - let `Payload` generate the `.targets` file during pack
 - choose stable, package-specific tags such as:
-  - `FluentValidationSkill`
+  - `ExampleSkill`
   - `PrettyConsoleSkill`
   - `ArrowDbDocs`
 
@@ -192,7 +192,7 @@ A consumer may declare policies such as:
 
 ```xml
 <ItemGroup>
-  <PayloadPolicy Include="ParentPackage" Tag="FluentValidationSkill" Disable="true" />
+  <PayloadPolicy Include="ParentPackage" Tag="ExampleSkill" Disable="true" />
 </ItemGroup>
 ```
 
@@ -200,7 +200,7 @@ Or opt a tag into absolute destination handling:
 
 ```xml
 <ItemGroup>
-  <PayloadPolicy Include="ParentPackage" Tag="FluentValidationSkill" PathKind="Absolute" />
+  <PayloadPolicy Include="ParentPackage" Tag="ExampleSkill" PathKind="Absolute" />
 </ItemGroup>
 ```
 
