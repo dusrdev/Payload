@@ -20,8 +20,11 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Restore
-        run: dotnet restore RepoContentCopy.slnx
+      - name: Restore Payload
+        run: dotnet restore src/Payload/Payload.csproj
+
+      - name: Restore Tests
+        run: dotnet restore tests/Payload.Tests/Payload.Tests.csproj
 
       - name: Build Payload
         run: dotnet build src/Payload/Payload.csproj -c Release -nologo -p:GeneratePackageOnBuild=false --no-restore
