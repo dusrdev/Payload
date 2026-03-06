@@ -1,0 +1,9 @@
+[
+  _rels/.rels,
+  [Content_Types].xml,
+  build/ParentPackage.Example.targets,
+  buildTransitive/ParentPackage.Example.targets,
+  package/services/metadata/core-properties/<generated>.psmdcp,
+  ParentPackage.Example.nuspec,
+  payload/0000/SKILL.md
+]

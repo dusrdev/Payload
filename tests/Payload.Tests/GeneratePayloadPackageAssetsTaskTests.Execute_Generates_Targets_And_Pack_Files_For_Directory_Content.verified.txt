@@ -1,0 +1,21 @@
+{
+  PackagePaths: [
+    payload/0000/notes.txt,
+    payload/0000/SKILL.md
+  ],
+  GeneratedTargets:
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <_Payload_ParentPackage_Example_Root>$(MSBuildThisFileDirectory)..\payload\</_Payload_ParentPackage_Example_Root>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PayloadContent Include="$(_Payload_ParentPackage_Example_Root)0000">
+      <PackageId>ParentPackage.Example</PackageId>
+      <Tag>FluentValidationSkill</Tag>
+      <TargetPath>.agents/skills/fluent-validation-expert</TargetPath>
+    </PayloadContent>
+  </ItemGroup>
+</Project>
+
+}

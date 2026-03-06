@@ -1,0 +1,63 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <UsingTask
+    TaskName="Payload.Tasks.CopyRepoContentTask"
+    AssemblyFile="$(MSBuildThisFileDirectory)netstandard2.0\Payload.dll" />
+
+  <UsingTask
+    TaskName="Payload.Tasks.GeneratePayloadPackageAssetsTask"
+    AssemblyFile="$(MSBuildThisFileDirectory)netstandard2.0\Payload.dll" />
+
+  <PropertyGroup>
+    <_PayloadGeneratedTargetsDir>$(IntermediateOutputPath)Payload\</_PayloadGeneratedTargetsDir>
+  </PropertyGroup>
+
+  <Target Name="Payload_GeneratePackageAssets"
+          BeforeTargets="_GetPackageFiles"
+          Condition="'@(PayloadContent)' != ''">
+    <ItemGroup>
+      <_PayloadAuthoredContent Include="@(PayloadContent)" Condition="'%(PayloadContent.PackageId)' == ''" />
+    </ItemGroup>
+
+    <GeneratePayloadPackageAssetsTask
+      Condition="'@(_PayloadAuthoredContent)' != ''"
+      PayloadContentItems="@(_PayloadAuthoredContent)"
+      PackageId="$(PackageId)"
+      OutputPath="$(_PayloadGeneratedTargetsDir)">
+      <Output TaskParameter="GeneratedTargetsFile" PropertyName="_PayloadGeneratedTargetsFile" />
+      <Output TaskParameter="PackFiles" ItemName="_PayloadGeneratedPackFiles" />
+    </GeneratePayloadPackageAssetsTask>
+
+    <ItemGroup Condition="'$(_PayloadGeneratedTargetsFile)' != '' and Exists('$(_PayloadGeneratedTargetsFile)')">
+      <_PackageFiles Include="$(_PayloadGeneratedTargetsFile)">
+        <PackagePath>build\$(PackageId).targets</PackagePath>
+        <BuildAction>None</BuildAction>
+      </_PackageFiles>
+      <_PackageFiles Include="$(_PayloadGeneratedTargetsFile)">
+        <PackagePath>buildTransitive\$(PackageId).targets</PackagePath>
+        <BuildAction>None</BuildAction>
+      </_PackageFiles>
+    </ItemGroup>
+
+    <ItemGroup>
+      <_PackageFiles Include="@(_PayloadGeneratedPackFiles)">
+        <PackagePath>%(_PayloadGeneratedPackFiles.PackagePath)</PackagePath>
+        <BuildAction>None</BuildAction>
+      </_PackageFiles>
+    </ItemGroup>
+  </Target>
+
+  <Target Name="Payload_CopyContent"
+          BeforeTargets="BeforeBuild"
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(PayloadCopyEnabled)' == 'true' and '@(PayloadContent)' != ''">
+    <ItemGroup>
+      <_PayloadResolvedContent Include="@(PayloadContent)" Condition="'%(PayloadContent.PackageId)' != ''" />
+    </ItemGroup>
+
+    <CopyRepoContentTask
+      Condition="'@(_PayloadResolvedContent)' != ''"
+      ProjectDirectory="$(MSBuildProjectDirectory)"
+      RootDirectory="$(PayloadRootDirectory)"
+      PayloadContentItems="@(_PayloadResolvedContent)"
+      PayloadPolicies="@(PayloadPolicy)" />
+  </Target>
+</Project>

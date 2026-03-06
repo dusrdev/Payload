@@ -1,0 +1,31 @@
+name: test
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+          cache: true
+
+      - name: Restore
+        run: dotnet restore RepoContentCopy.slnx
+
+      - name: Build Payload
+        run: dotnet build src/Payload/Payload.csproj -c Release -nologo -p:GeneratePackageOnBuild=false --no-restore
+
+      - name: Run TUnit suite
+        run: dotnet run --project tests/Payload.Tests/Payload.Tests.csproj -c Release --no-restore -- --disable-logo

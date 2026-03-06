@@ -1,0 +1,111 @@
+using Payload.Tasks;
+using Payload.Tests.TestSupport;
+
+namespace Payload.Tests;
+
+public class GeneratePayloadPackageAssetsTaskTests
+{
+    [Test]
+    public async Task Execute_Generates_Targets_And_Pack_Files_For_Directory_Content()
+    {
+        using var temp = new TemporaryDirectory();
+        var contentRoot = Path.Combine(temp.Path, "content", "skills", "fluent-validation-expert");
+        Directory.CreateDirectory(contentRoot);
+        await File.WriteAllTextAsync(Path.Combine(contentRoot, "SKILL.md"), "# skill");
+        await File.WriteAllTextAsync(Path.Combine(contentRoot, "notes.txt"), "notes");
+
+        var engine = new RecordingBuildEngine();
+        var task = new GeneratePayloadPackageAssetsTask
+        {
+            BuildEngine = engine,
+            PackageId = "ParentPackage.Example",
+            OutputPath = Path.Combine(temp.Path, "obj"),
+            PayloadContentItems =
+            [
+                TestTaskItem.Create(contentRoot, ("Tag", "FluentValidationSkill"), ("TargetPath", ".agents/skills/fluent-validation-expert"))
+            ]
+        };
+
+        var result = task.Execute();
+
+        await Assert.That(result).IsTrue();
+        await Assert.That(File.Exists(task.GeneratedTargetsFile)).IsTrue();
+        await Assert.That(task.PackFiles).Count().IsEqualTo(2);
+
+        await Verify(new
+        {
+            PackagePaths = task.PackFiles
+                .Select(x => x.GetMetadata("PackagePath").Replace('\\', '/'))
+                .OrderBy(x => x)
+                .ToArray(),
+            GeneratedTargets = await File.ReadAllTextAsync(task.GeneratedTargetsFile)
+        });
+
+        await Assert.That(engine.Errors).Count().IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task Execute_Reuses_Existing_Targets_File_When_Content_Does_Not_Change()
+    {
+        using var temp = new TemporaryDirectory();
+        var filePath = Path.Combine(temp.Path, "content", "README.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+        await File.WriteAllTextAsync(filePath, "hello");
+
+        var outputPath = Path.Combine(temp.Path, "obj");
+
+        var firstEngine = new RecordingBuildEngine();
+        var firstTask = CreateTask(filePath, outputPath, firstEngine);
+        await Assert.That(firstTask.Execute()).IsTrue();
+        var firstWriteTime = File.GetLastWriteTimeUtc(firstTask.GeneratedTargetsFile);
+
+        await Task.Delay(1200);
+
+        var secondEngine = new RecordingBuildEngine();
+        var secondTask = CreateTask(filePath, outputPath, secondEngine);
+        await Assert.That(secondTask.Execute()).IsTrue();
+        var secondWriteTime = File.GetLastWriteTimeUtc(secondTask.GeneratedTargetsFile);
+
+        await Assert.That(secondWriteTime).IsEqualTo(firstWriteTime);
+        await Assert.That(secondEngine.Messages.Any(x => (x.Message ?? string.Empty).Contains("reused", StringComparison.OrdinalIgnoreCase))).IsTrue();
+    }
+
+    [Test]
+    public async Task Execute_Fails_When_Required_Metadata_Is_Missing()
+    {
+        using var temp = new TemporaryDirectory();
+        var filePath = Path.Combine(temp.Path, "content", "README.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+        await File.WriteAllTextAsync(filePath, "hello");
+
+        var engine = new RecordingBuildEngine();
+        var task = new GeneratePayloadPackageAssetsTask
+        {
+            BuildEngine = engine,
+            PackageId = "ParentPackage.Example",
+            OutputPath = Path.Combine(temp.Path, "obj"),
+            PayloadContentItems =
+            [
+                TestTaskItem.Create(filePath, ("TargetPath", ".agents/skills/fluent-validation-expert"))
+            ]
+        };
+
+        var result = task.Execute();
+
+        await Assert.That(result).IsFalse();
+        await Assert.That(engine.Errors).Count().IsEqualTo(1);
+        await Assert.That(engine.Errors[0].Message).Contains("missing Tag metadata");
+    }
+
+    private static GeneratePayloadPackageAssetsTask CreateTask(string sourcePath, string outputPath, RecordingBuildEngine engine)
+        => new()
+        {
+            BuildEngine = engine,
+            PackageId = "ParentPackage.Example",
+            OutputPath = outputPath,
+            PayloadContentItems =
+            [
+                TestTaskItem.Create(sourcePath, ("Tag", "Docs"), ("TargetPath", "docs/README.md"))
+            ]
+        };
+}

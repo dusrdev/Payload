@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RestoreAdditionalProjectSources>$(RestoreAdditionalProjectSources);$(MSBuildThisFileDirectory)..\..\src\Payload\bin\Debug;$(MSBuildThisFileDirectory)..\ParentPackage.Example\bin\Debug</RestoreAdditionalProjectSources>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ParentPackage.Example" Version="0.1.0-alpha" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Toggle to true to stop future synchronization for this tag. Existing files remain. -->
+    <PayloadPolicy Include="ParentPackage.Example" Tag="FluentValidationSkill" Disable="false" />
+  </ItemGroup>
+</Project>

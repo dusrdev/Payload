@@ -1,0 +1,69 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <IncludeBuildOutput>true</IncludeBuildOutput>
+    <BuildOutputTargetFolder>build</BuildOutputTargetFolder>
+    <IsPackable>true</IsPackable>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <IncludeSymbols>true</IncludeSymbols>
+    <IncludeSource>true</IncludeSource>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <NoWarn>$(NoWarn);NU5100;NU5128</NoWarn>
+
+    <PackageId>Payload</PackageId>
+    <Title>Payload</Title>
+    <Version>1.0.0-alpha</Version>
+    <Authors>David Shnayder</Authors>
+    <Description>Build-time helper for copying parent-package bundled content into a consumer repository.</Description>
+    <Copyright>David Shnayder</Copyright>
+    <PackageTags>Bundle; File; Copy; Skills</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/dusrdev/Payload/</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/dusrdev/Payload/</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Build.Framework" Version="18.3.3" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.Build.Utilities.Core" Version="18.3.3" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="PolyfillLib" Version="9.18.0" GeneratePathProperty="true" PrivateAssets="all" ExcludeAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="PolyfillLib">
+      <HintPath>$(PkgPolyfillLib)/lib/netstandard2.0/PolyfillLib.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Payload.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="README.md" />
+    <None Include="build/Payload.props" Pack="true" PackagePath="build/Payload.props" />
+    <None Include="build/Payload.targets" Pack="true" PackagePath="build/Payload.targets" />
+    <None Include="buildTransitive/Payload.props" Pack="true" PackagePath="buildTransitive/Payload.props" />
+    <None Include="buildTransitive/Payload.targets" Pack="true" PackagePath="buildTransitive/Payload.targets" />
+    <None Include="$(PkgPolyfillLib)/lib/netstandard2.0/PolyfillLib.dll" Pack="true" PackagePath="build/netstandard2.0/PolyfillLib.dll" />
+  </ItemGroup>
+</Project>

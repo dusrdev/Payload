@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="samples/ConsumerApp/ConsumerApp.csproj" />
+  <Project Path="samples/ParentPackage.Example/ParentPackage.Example.csproj" />
+  <Project Path="src/Payload/Payload.csproj" />
+  <Project Path="tests/Payload.Tests/Payload.Tests.csproj" />
+</Solution>
