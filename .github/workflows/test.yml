@@ -27,7 +27,7 @@ jobs:
         run: dotnet restore tests/Payload.Tests/Payload.Tests.csproj
 
       - name: Build Payload
-        run: dotnet build src/Payload/Payload.csproj -c Release -nologo -p:GeneratePackageOnBuild=false --no-restore
+        run: dotnet build src/Payload/Payload.csproj -c Release -nologo --no-restore
 
       - name: Run TUnit suite
         run: dotnet run --project tests/Payload.Tests/Payload.Tests.csproj -c Release --no-restore -- --disable-logo

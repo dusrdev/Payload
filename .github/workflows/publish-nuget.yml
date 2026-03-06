@@ -64,7 +64,6 @@ jobs:
             -c Release \
             -nologo \
             --no-restore \
-            -p:GeneratePackageOnBuild=false \
             -p:ContinuousIntegrationBuild=true \
             -p:SignAssembly=true \
             -p:AssemblyOriginatorKeyFile="$STRONG_NAME_KEY_PATH" \
