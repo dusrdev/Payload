@@ -1,0 +1,11 @@
+<Project>
+  <Target Name="BootstrapSamplePackageFeeds" BeforeTargets="Restore">
+    <Exec
+      WorkingDirectory="$(MSBuildThisFileDirectory)"
+      Command='dotnet build "src/Payload/Payload.csproj" -nologo -c "$(Configuration)"' />
+
+    <Exec
+      WorkingDirectory="$(MSBuildThisFileDirectory)"
+      Command='dotnet build "tests/ParentPackage/ParentPackage.csproj" -nologo -c "$(Configuration)" -p:RestoreForce=true' />
+  </Target>
+</Project>

@@ -77,7 +77,7 @@ Consumers can opt out of specific tags:
 
 ```xml
 <ItemGroup>
-  <PayloadPolicy Include="ParentPackage.Example"
+  <PayloadPolicy Include="ParentPackage"
                  Tag="FluentValidationSkill"
                  Disable="true" />
 </ItemGroup>
@@ -106,7 +106,7 @@ If a consumer wants a specific tag to use an absolute destination instead, they 
 
 ```xml
 <ItemGroup>
-  <PayloadPolicy Include="ParentPackage.Example"
+  <PayloadPolicy Include="ParentPackage"
                  Tag="FluentValidationSkill"
                  PathKind="Absolute" />
 </ItemGroup>
@@ -179,11 +179,11 @@ That means the authoring package does not need to hand-maintain its own `.target
 
 ## Example
 
-This repository includes an end-to-end sample flow:
+This repository includes an end-to-end test fixture flow:
 
 - [src/Payload](src/Payload)
   The build package itself
-- [samples/ParentPackage.Example](samples/ParentPackage.Example)
-  A parent package that ships a skill folder
-- [samples/ConsumerApp](samples/ConsumerApp)
-  A consumer that references the parent package and can opt out via `PayloadPolicy`
+- [tests/ParentPackage](tests/ParentPackage)
+  A parent package fixture that ships a skill folder
+- [tests/ConsumerApp](tests/ConsumerApp)
+  A consumer fixture that references the parent package and can opt out via `PayloadPolicy`

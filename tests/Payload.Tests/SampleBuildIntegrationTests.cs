@@ -14,10 +14,10 @@ public class SampleBuildIntegrationTests
         var payloadBuild = await DotnetCommand.RunAsync(["build", "src/Payload/Payload.csproj", "-nologo"], workspace.RootPath, env);
         AssertSucceeded(payloadBuild);
 
-        var parentBuild = await DotnetCommand.RunAsync(["build", "samples/ParentPackage.Example/ParentPackage.Example.csproj", "-nologo", "-p:RestoreForce=true"], workspace.RootPath, env);
+        var parentBuild = await DotnetCommand.RunAsync(["build", "tests/ParentPackage/ParentPackage.csproj", "-nologo", "-p:RestoreForce=true"], workspace.RootPath, env);
         AssertSucceeded(parentBuild);
 
-        var nupkgPath = Path.Combine(workspace.RootPath, "samples", "ParentPackage.Example", "bin", "Debug", "ParentPackage.Example.0.1.0-alpha.nupkg");
+        var nupkgPath = Path.Combine(workspace.RootPath, "tests", "ParentPackage", "bin", "Debug", "ParentPackage.0.1.0-alpha.nupkg");
         await Assert.That(File.Exists(nupkgPath)).IsTrue();
 
         using (var package = ZipFile.OpenRead(nupkgPath))
@@ -28,7 +28,7 @@ public class SampleBuildIntegrationTests
                 .ToArray());
         }
 
-        var consumerBuild = await DotnetCommand.RunAsync(["build", "samples/ConsumerApp/ConsumerApp.csproj", "-nologo", "-p:RestoreForce=true"], workspace.RootPath, env);
+        var consumerBuild = await DotnetCommand.RunAsync(["build", "tests/ConsumerApp/ConsumerApp.csproj", "-nologo", "-p:RestoreForce=true"], workspace.RootPath, env);
         AssertSucceeded(consumerBuild);
 
         var copiedSkillPath = Path.Combine(workspace.RootPath, ".agents", "skills", "fluent-validation-expert", "SKILL.md");
@@ -39,7 +39,7 @@ public class SampleBuildIntegrationTests
     public async Task Sample_Flow_Respects_Disable_Policy()
     {
         using var workspace = new TestWorkspace();
-        var consumerProjectPath = Path.Combine(workspace.RootPath, "samples", "ConsumerApp", "ConsumerApp.csproj");
+        var consumerProjectPath = Path.Combine(workspace.RootPath, "tests", "ConsumerApp", "ConsumerApp.csproj");
         var consumerProject = await File.ReadAllTextAsync(consumerProjectPath);
         consumerProject = consumerProject.Replace("Disable=\"false\"", "Disable=\"true\"", StringComparison.Ordinal);
         await File.WriteAllTextAsync(consumerProjectPath, consumerProject);
@@ -47,9 +47,9 @@ public class SampleBuildIntegrationTests
         var env = CreateEnvironment(workspace);
 
         AssertSucceeded(await DotnetCommand.RunAsync(["build", "src/Payload/Payload.csproj", "-nologo"], workspace.RootPath, env));
-        AssertSucceeded(await DotnetCommand.RunAsync(["build", "samples/ParentPackage.Example/ParentPackage.Example.csproj", "-nologo", "-p:RestoreForce=true"], workspace.RootPath, env));
+        AssertSucceeded(await DotnetCommand.RunAsync(["build", "tests/ParentPackage/ParentPackage.csproj", "-nologo", "-p:RestoreForce=true"], workspace.RootPath, env));
 
-        var consumerBuild = await DotnetCommand.RunAsync(["build", "samples/ConsumerApp/ConsumerApp.csproj", "-nologo", "-p:RestoreForce=true"], workspace.RootPath, env);
+        var consumerBuild = await DotnetCommand.RunAsync(["build", "tests/ConsumerApp/ConsumerApp.csproj", "-nologo", "-p:RestoreForce=true"], workspace.RootPath, env);
         AssertSucceeded(consumerBuild);
 
         var copiedSkillPath = Path.Combine(workspace.RootPath, ".agents", "skills", "fluent-validation-expert", "SKILL.md");

@@ -1,0 +1,14 @@
+<Project>
+  <PropertyGroup>
+    <_FixtureConfiguration Condition="'$(Configuration)' == ''">Debug</_FixtureConfiguration>
+    <_FixtureConfiguration Condition="'$(Configuration)' != ''">$(Configuration)</_FixtureConfiguration>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'ParentPackage'">
+    <RestoreAdditionalProjectSources>$(RestoreAdditionalProjectSources);$(MSBuildThisFileDirectory)../src/Payload/bin/$(_FixtureConfiguration)</RestoreAdditionalProjectSources>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'ConsumerApp'">
+    <RestoreAdditionalProjectSources>$(RestoreAdditionalProjectSources);$(MSBuildThisFileDirectory)../src/Payload/bin/$(_FixtureConfiguration);$(MSBuildThisFileDirectory)ParentPackage/bin/$(_FixtureConfiguration)</RestoreAdditionalProjectSources>
+  </PropertyGroup>
+</Project>

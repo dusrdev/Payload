@@ -18,7 +18,7 @@ public class GeneratePayloadPackageAssetsTaskTests
         var task = new GeneratePayloadPackageAssetsTask
         {
             BuildEngine = engine,
-            PackageId = "ParentPackage.Example",
+            PackageId = "ParentPackage",
             OutputPath = Path.Combine(temp.Path, "obj"),
             PayloadContentItems =
             [
@@ -82,7 +82,7 @@ public class GeneratePayloadPackageAssetsTaskTests
         var task = new GeneratePayloadPackageAssetsTask
         {
             BuildEngine = engine,
-            PackageId = "ParentPackage.Example",
+            PackageId = "ParentPackage",
             OutputPath = Path.Combine(temp.Path, "obj"),
             PayloadContentItems =
             [
@@ -101,7 +101,7 @@ public class GeneratePayloadPackageAssetsTaskTests
         => new()
         {
             BuildEngine = engine,
-            PackageId = "ParentPackage.Example",
+            PackageId = "ParentPackage",
             OutputPath = outputPath,
             PayloadContentItems =
             [

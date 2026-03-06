@@ -13,7 +13,7 @@ internal sealed class TestWorkspace : IDisposable
         CopyFile("README.md");
         CopyFile("RepoContentCopy.slnx");
         CopyDirectory("src");
-        CopyDirectory("samples");
+        CopyDirectory("tests");
     }
 
     public string RootPath { get; }

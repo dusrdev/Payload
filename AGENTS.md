@@ -159,10 +159,10 @@ Version one should not include:
 
 - `src/Payload`
   - the shared package with task + targets
-- `samples/ParentPackage.Example`
-  - an example parent package that declares bundled content
-- `samples/ConsumerApp`
-  - an example consumer project showing opt-out usage
+- `tests/ParentPackage`
+  - a parent-package fixture that declares bundled content
+- `tests/ConsumerApp`
+  - a consumer fixture showing opt-out usage
 
 ### Build package responsibilities
 
@@ -192,7 +192,7 @@ A consumer may declare policies such as:
 
 ```xml
 <ItemGroup>
-  <PayloadPolicy Include="ParentPackage.Example" Tag="FluentValidationSkill" Disable="true" />
+  <PayloadPolicy Include="ParentPackage" Tag="FluentValidationSkill" Disable="true" />
 </ItemGroup>
 ```
 
@@ -200,7 +200,7 @@ Or opt a tag into absolute destination handling:
 
 ```xml
 <ItemGroup>
-  <PayloadPolicy Include="ParentPackage.Example" Tag="FluentValidationSkill" PathKind="Absolute" />
+  <PayloadPolicy Include="ParentPackage" Tag="FluentValidationSkill" PathKind="Absolute" />
 </ItemGroup>
 ```
 

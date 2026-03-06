@@ -4,18 +4,17 @@
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <PackageId>ParentPackage.Example</PackageId>
+    <PackageId>ParentPackage</PackageId>
     <Version>0.1.0-alpha</Version>
     <IsPackable>true</IsPackable>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <Description>Example parent package that bundles a skill through Payload.</Description>
     <NoWarn>$(NoWarn);NU5128</NoWarn>
-    <RestoreAdditionalProjectSources>$(RestoreAdditionalProjectSources);$(MSBuildThisFileDirectory)..\..\src\Payload\bin\Debug</RestoreAdditionalProjectSources>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Payload" Version="0.1.0-alpha" />
+    <PackageReference Include="Payload" Version="1.0.0-alpha" />
   </ItemGroup>
 
   <ItemGroup>

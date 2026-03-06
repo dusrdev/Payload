@@ -10,10 +10,10 @@ public class PolicyMapTests
     {
         var map = PolicyMap.Create(
         [
-            TestTaskItem.Create("ParentPackage.Example", ("Tag", "FluentValidationSkill"), ("Disable", "true"))
+            TestTaskItem.Create("ParentPackage", ("Tag", "FluentValidationSkill"), ("Disable", "true"))
         ]);
 
-        await Assert.That(map.IsDisabled("parentpackage.example", "fluentvalidationskill")).IsTrue();
+        await Assert.That(map.IsDisabled("parentpackage", "fluentvalidationskill")).IsTrue();
     }
 
     [Test]
@@ -22,10 +22,10 @@ public class PolicyMapTests
         var map = PolicyMap.Create(
         [
             TestTaskItem.Create(string.Empty, ("Tag", "Skill"), ("Disable", "true")),
-            TestTaskItem.Create("ParentPackage.Example", ("Disable", "true"))
+            TestTaskItem.Create("ParentPackage", ("Disable", "true"))
         ]);
 
-        await Assert.That(map.IsDisabled("ParentPackage.Example", "Skill")).IsFalse();
+        await Assert.That(map.IsDisabled("ParentPackage", "Skill")).IsFalse();
     }
 
     [Test]
@@ -33,12 +33,12 @@ public class PolicyMapTests
     {
         var map = PolicyMap.Create(
         [
-            TestTaskItem.Create("ParentPackage.Example", ("Tag", "SkillA"), ("Disable", "false")),
-            TestTaskItem.Create("ParentPackage.Example", ("Tag", "SkillB"), ("Disable", "invalid"))
+            TestTaskItem.Create("ParentPackage", ("Tag", "SkillA"), ("Disable", "false")),
+            TestTaskItem.Create("ParentPackage", ("Tag", "SkillB"), ("Disable", "invalid"))
         ]);
 
-        await Assert.That(map.IsDisabled("ParentPackage.Example", "SkillA")).IsFalse();
-        await Assert.That(map.IsDisabled("ParentPackage.Example", "SkillB")).IsFalse();
+        await Assert.That(map.IsDisabled("ParentPackage", "SkillA")).IsFalse();
+        await Assert.That(map.IsDisabled("ParentPackage", "SkillB")).IsFalse();
     }
 
     [Test]
@@ -46,10 +46,10 @@ public class PolicyMapTests
     {
         var map = PolicyMap.Create(
         [
-            TestTaskItem.Create("ParentPackage.Example", ("Tag", "Docs"), (nameof(PathKind), nameof(PathKind.Absolute)))
+            TestTaskItem.Create("ParentPackage", ("Tag", "Docs"), (nameof(PathKind), nameof(PathKind.Absolute)))
         ]);
 
-        var found = map.TryGetPathKind("parentpackage.example", "docs", out var pathKind, out var rawPathKind);
+        var found = map.TryGetPathKind("parentpackage", "docs", out var pathKind, out var rawPathKind);
 
         await Assert.That(found).IsTrue();
         await Assert.That(pathKind).IsEqualTo(PathKind.Absolute);

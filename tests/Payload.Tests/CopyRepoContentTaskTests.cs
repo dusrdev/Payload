@@ -20,7 +20,7 @@ public class CopyRepoContentTaskTests
 
         var task = CreateTask(projectDirectory, repoRoot,
         [
-            TestTaskItem.Create(sourceFile, ("PackageId", "ParentPackage.Example"), ("Tag", "Docs"), ("TargetPath", "docs/README.md"))
+            TestTaskItem.Create(sourceFile, ("PackageId", "ParentPackage"), ("Tag", "Docs"), ("TargetPath", "docs/README.md"))
         ]);
 
         var result = task.Execute();
@@ -47,7 +47,7 @@ public class CopyRepoContentTaskTests
 
         var task = CreateTask(projectDirectory, repoRoot,
         [
-            TestTaskItem.Create(sourceDirectory, ("PackageId", "ParentPackage.Example"), ("Tag", "Assets"), ("TargetPath", "assets"))
+            TestTaskItem.Create(sourceDirectory, ("PackageId", "ParentPackage"), ("Tag", "Assets"), ("TargetPath", "assets"))
         ]);
 
         await Assert.That(task.Execute()).IsTrue();
@@ -70,10 +70,10 @@ public class CopyRepoContentTaskTests
 
         var task = CreateTask(projectDirectory, repoRoot,
         [
-            TestTaskItem.Create(sourceFile, ("PackageId", "ParentPackage.Example"), ("Tag", "Docs"), ("TargetPath", "docs/README.md"))
+            TestTaskItem.Create(sourceFile, ("PackageId", "ParentPackage"), ("Tag", "Docs"), ("TargetPath", "docs/README.md"))
         ],
         [
-            TestTaskItem.Create("ParentPackage.Example", ("Tag", "Docs"), ("Disable", "true"))
+            TestTaskItem.Create("ParentPackage", ("Tag", "Docs"), ("Disable", "true"))
         ]);
 
         await Assert.That(task.Execute()).IsTrue();
@@ -98,7 +98,7 @@ public class CopyRepoContentTaskTests
 
         var task = CreateTask(projectDirectory, repoRoot,
         [
-            TestTaskItem.Create(sourceFile, ("PackageId", "ParentPackage.Example"), ("Tag", "Docs"), ("TargetPath", "docs/README.md"))
+            TestTaskItem.Create(sourceFile, ("PackageId", "ParentPackage"), ("Tag", "Docs"), ("TargetPath", "docs/README.md"))
         ]);
 
         var beforeWriteTime = File.GetLastWriteTimeUtc(destinationFile);
@@ -128,7 +128,7 @@ public class CopyRepoContentTaskTests
 
         var task = CreateTask(projectDirectory, repoRoot,
         [
-            TestTaskItem.Create(sourceFile, ("PackageId", "ParentPackage.Example"), ("Tag", "Docs"), ("TargetPath", "docs/README.md"))
+            TestTaskItem.Create(sourceFile, ("PackageId", "ParentPackage"), ("Tag", "Docs"), ("TargetPath", "docs/README.md"))
         ]);
 
         await Assert.That(task.Execute()).IsTrue();
@@ -152,10 +152,10 @@ public class CopyRepoContentTaskTests
 
         var task = CreateTask(projectDirectory, string.Empty,
         [
-            TestTaskItem.Create(sourceFile, ("PackageId", "ParentPackage.Example"), ("Tag", "Docs"), ("TargetPath", absoluteTarget))
+            TestTaskItem.Create(sourceFile, ("PackageId", "ParentPackage"), ("Tag", "Docs"), ("TargetPath", absoluteTarget))
         ],
         [
-            TestTaskItem.Create("ParentPackage.Example", ("Tag", "Docs"), ("PathKind", "Absolute"))
+            TestTaskItem.Create("ParentPackage", ("Tag", "Docs"), ("PathKind", "Absolute"))
         ]);
 
         await Assert.That(task.Execute()).IsTrue();
@@ -186,7 +186,7 @@ public class CopyRepoContentTaskTests
             RootDirectory = repoRoot,
             PayloadContentItems =
             [
-                TestTaskItem.Create(sourceFile, ("PackageId", "ParentPackage.Example"), ("Tag", "Docs"), ("TargetPath", absoluteTarget))
+                TestTaskItem.Create(sourceFile, ("PackageId", "ParentPackage"), ("Tag", "Docs"), ("TargetPath", absoluteTarget))
             ],
             PayloadPolicies = []
         };
@@ -215,11 +215,11 @@ public class CopyRepoContentTaskTests
             RootDirectory = string.Empty,
             PayloadContentItems =
             [
-                TestTaskItem.Create(sourceFile, ("PackageId", "ParentPackage.Example"), ("Tag", "Docs"), ("TargetPath", "docs/README.md"))
+                TestTaskItem.Create(sourceFile, ("PackageId", "ParentPackage"), ("Tag", "Docs"), ("TargetPath", "docs/README.md"))
             ],
             PayloadPolicies =
             [
-                TestTaskItem.Create("ParentPackage.Example", ("Tag", "Docs"), ("PathKind", "Absolute"))
+                TestTaskItem.Create("ParentPackage", ("Tag", "Docs"), ("PathKind", "Absolute"))
             ]
         };
 
