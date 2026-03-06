@@ -3,28 +3,16 @@
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)
 [![.NET](https://img.shields.io/badge/.NET-netstandard2.0-512BD4?style=flat-square)](https://dotnet.microsoft.com/)
 
-Payload is a small build-time NuGet helper for packages that need to drop bundled files into a consumer repository.
+Payload is a build-time NuGet helper for packages that need to place bundled files into a consumer repository during build.
 
-It is designed for cases where a package should bring along files such as:
+Use it when a package should bring along content such as:
 
 - `.agents/skills/...`
 - repository templates
 - starter configuration files
-- docs, examples, or assets that should appear in the consuming repo
+- docs, examples, or small asset folders
 
-The package stays deliberately narrow. It does not try to be a deployment engine, a template renderer, or a config merger. It solves one problem: package-provided content, copied during build, with simple consumer-side opt-out by tag.
-
-## Why Payload Exists
-
-Sometimes a NuGet package wants to ship more than assemblies.
-
-Examples:
-
-- a parent package wants to install one or more agent skills into `.agents/skills`
-- a package wants to provide starter docs or sample files inside the consumer repo
-- a tooling package wants to drop a small folder of assets into a conventional location
-
-Payload lets the package author declare those files once, ship them inside the `.nupkg`, and have them copied into the consumer repository automatically.
+Payload is intentionally narrow. It lets a parent package declare bundled content, ship that content inside the `.nupkg`, and copy it into the consuming repo with simple consumer-side control by `PackageId + Tag`. It does not try to be a deployment engine, template renderer, or config merger.
 
 ## Features
 
