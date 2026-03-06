@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   publish:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
 
     env:
       NUGET_SOURCE: https://api.nuget.org/v3/index.json
@@ -28,97 +28,77 @@ jobs:
           cache: true
 
       - name: Validate secrets
-        shell: pwsh
+        shell: bash
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-          NUGET_SIGN_CERT_BASE64: ${{ secrets.NUGET_SIGN_CERT_BASE64 }}
-          NUGET_SIGN_CERT_PASSWORD: ${{ secrets.NUGET_SIGN_CERT_PASSWORD }}
-          NUGET_TIMESTAMP_URL: ${{ secrets.NUGET_TIMESTAMP_URL }}
+          SNK: ${{ secrets.SNK }}
         run: |
-          $required = @(
-            'NUGET_API_KEY',
-            'NUGET_SIGN_CERT_BASE64',
-            'NUGET_SIGN_CERT_PASSWORD',
-            'NUGET_TIMESTAMP_URL'
-          )
+          missing=()
 
-          $missing = $required | Where-Object { [string]::IsNullOrWhiteSpace((Get-Item "env:$_").Value) }
+          for name in NUGET_API_KEY SNK; do
+            if [ -z "${!name}" ]; then
+              missing+=("$name")
+            fi
+          done
 
-          if ($missing.Count -gt 0) {
-            throw "Missing required secrets: $($missing -join ', ')"
-          }
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "Missing required secrets: ${missing[*]}" >&2
+            exit 1
+          fi
 
       - name: Restore
         run: dotnet restore src/Payload/Payload.csproj
 
+      - name: Materialize strong-name key
+        shell: bash
+        env:
+          SNK: ${{ secrets.SNK }}
+        run: |
+          key_path="$RUNNER_TEMP/Payload.snk"
+          printf '%s' "$SNK" | base64 --decode > "$key_path"
+          echo "STRONG_NAME_KEY_PATH=$key_path" >> "$GITHUB_ENV"
+
       - name: Pack
-        run: dotnet pack src/Payload/Payload.csproj -c Release -nologo --no-restore -p:GeneratePackageOnBuild=false -p:ContinuousIntegrationBuild=true -o artifacts/nuget
-
-      - name: Materialize signing certificate
-        shell: pwsh
-        env:
-          NUGET_SIGN_CERT_BASE64: ${{ secrets.NUGET_SIGN_CERT_BASE64 }}
+        shell: bash
         run: |
-          $certificatePath = Join-Path $env:RUNNER_TEMP 'nuget-signing-cert.pfx'
-          [System.IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($env:NUGET_SIGN_CERT_BASE64))
-          "SIGN_CERT_PATH=$certificatePath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-      - name: Sign packages
-        shell: pwsh
-        env:
-          NUGET_SIGN_CERT_PASSWORD: ${{ secrets.NUGET_SIGN_CERT_PASSWORD }}
-          NUGET_TIMESTAMP_URL: ${{ secrets.NUGET_TIMESTAMP_URL }}
-        run: |
-          New-Item -ItemType Directory -Force -Path artifacts/signed | Out-Null
-
-          Get-ChildItem artifacts/nuget/*.nupkg |
-            Where-Object { $_.Name -notlike '*.snupkg' } |
-            ForEach-Object {
-              dotnet nuget sign $_.FullName `
-                --certificate-path $env:SIGN_CERT_PATH `
-                --certificate-password $env:NUGET_SIGN_CERT_PASSWORD `
-                --timestamper $env:NUGET_TIMESTAMP_URL `
-                --output artifacts/signed `
-                --overwrite
-            }
-
-          Get-ChildItem artifacts/nuget/*.snupkg -ErrorAction SilentlyContinue |
-            Copy-Item -Destination artifacts/signed
-
-      - name: Verify signed packages
-        shell: pwsh
-        run: |
-          Get-ChildItem artifacts/signed/*.nupkg |
-            Where-Object { $_.Name -notlike '*.snupkg' } |
-            ForEach-Object {
-              dotnet nuget verify $_.FullName --all
-            }
+          dotnet pack src/Payload/Payload.csproj \
+            -c Release \
+            -nologo \
+            --no-restore \
+            -p:GeneratePackageOnBuild=false \
+            -p:ContinuousIntegrationBuild=true \
+            -p:SignAssembly=true \
+            -p:AssemblyOriginatorKeyFile="$STRONG_NAME_KEY_PATH" \
+            -o artifacts/nuget
 
       - name: Upload package artifacts
         uses: actions/upload-artifact@v6
         with:
           name: nuget-packages
-          path: artifacts/signed/*
+          path: artifacts/nuget/*
           if-no-files-found: error
 
       - name: Push packages to NuGet.org
-        shell: pwsh
+        shell: bash
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: |
-          Get-ChildItem artifacts/signed/*.nupkg |
-            Where-Object { $_.Name -notlike '*.snupkg' } |
-            ForEach-Object {
-              dotnet nuget push $_.FullName `
-                --source $env:NUGET_SOURCE `
-                --api-key $env:NUGET_API_KEY `
-                --skip-duplicate
-            }
+          shopt -s nullglob
 
-          Get-ChildItem artifacts/signed/*.snupkg -ErrorAction SilentlyContinue |
-            ForEach-Object {
-              dotnet nuget push $_.FullName `
-                --source $env:NUGET_SOURCE `
-                --api-key $env:NUGET_API_KEY `
-                --skip-duplicate
-            }
+          for package in artifacts/nuget/*.nupkg; do
+            if [[ "$package" == *.snupkg ]]; then
+              continue
+            fi
+
+            dotnet nuget push "$package" \
+              --source "$NUGET_SOURCE" \
+              --api-key "$NUGET_API_KEY" \
+              --skip-duplicate
+          done
+
+          for symbols in artifacts/nuget/*.snupkg; do
+            dotnet nuget push "$symbols" \
+              --source "$NUGET_SOURCE" \
+              --api-key "$NUGET_API_KEY" \
+              --skip-duplicate
+          done
