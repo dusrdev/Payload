@@ -1,19 +1,55 @@
 # Payload
 
-`Payload` is a small build-time NuGet helper that copies package-bundled files into a consumer repository during build.
+![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)
+[![.NET](https://img.shields.io/badge/.NET-netstandard2.0-512BD4?style=flat-square)](https://dotnet.microsoft.com/)
 
-It is intentionally narrow:
+Payload is a small build-time NuGet helper for packages that need to drop bundled files into a consumer repository.
 
-- parent package authors declare grouped copy instructions with `PayloadContent`
-- consumer projects declare `PayloadPolicy` items scoped by `PackageId + Tag`
-- `Payload` generates the parent package's `build` and `buildTransitive` `.targets` files during pack
-- packaged files are copied into the consumer repository root on build
-- disabling stops future synchronization but does not remove existing files
-- file comparison uses size + SHA-256, not timestamps
-- consumer projects may set `PayloadRootDirectory` explicitly to bypass root detection
-- consumer paths are relative by default and can opt into absolute destinations with `PathKind="Absolute"`
+It is designed for cases where a package should bring along files such as:
 
-Authoring shape:
+- `.agents/skills/...`
+- repository templates
+- starter configuration files
+- docs, examples, or assets that should appear in the consuming repo
+
+The package stays deliberately narrow. It does not try to be a deployment engine, a template renderer, or a config merger. It solves one problem: package-provided content, copied during build, with simple consumer-side opt-out by tag.
+
+## Why Payload Exists
+
+Sometimes a NuGet package wants to ship more than assemblies.
+
+Examples:
+
+- a parent package wants to install one or more agent skills into `.agents/skills`
+- a package wants to provide starter docs or sample files inside the consumer repo
+- a tooling package wants to drop a small folder of assets into a conventional location
+
+Payload lets the package author declare those files once, ship them inside the `.nupkg`, and have them copied into the consumer repository automatically.
+
+## Features
+
+- Parent packages declare bundled content with `PayloadContent`
+- Consumers control copy behavior per `PackageId + Tag` with `PayloadPolicy`
+- Content can be a single file or a whole directory
+- Directories are copied recursively while preserving relative structure
+- Copy decisions use file size plus SHA-256, not timestamps
+- Parent-package `.targets` are generated automatically during pack
+- Repository root detection is built in, with explicit override via `PayloadRootDirectory`
+- Consumer policies support both relative and absolute destination handling through `PathKind`
+
+## Installation
+
+Package authors reference `Payload` from the package that will ship content:
+
+```bash
+dotnet add package Payload
+```
+
+The authoring package then declares `PayloadContent` items in its project. During pack, Payload generates the package's `build` and `buildTransitive` assets and includes the authored content under `payload/` inside the `.nupkg`.
+
+## Authoring in a Parent Package
+
+Declare one or more `PayloadContent` items:
 
 ```xml
 <ItemGroup>
@@ -24,52 +60,130 @@ Authoring shape:
 </ItemGroup>
 ```
 
-Consumer shape:
+Meaning:
+
+- `Include`
+  The local file or directory to package
+- `Tag`
+  The logical group name consumers can target
+- `TargetPath`
+  The destination path inside the consuming repository
+
+If the source is a directory, Payload copies all files beneath it and preserves their relative layout under `TargetPath`.
+
+## Consumer Control with `PayloadPolicy`
+
+Consumers can opt out of specific tags:
 
 ```xml
 <ItemGroup>
-  <PayloadPolicy Include="ParentPackage.Example" Tag="FluentValidationSkill" Disable="true" />
+  <PayloadPolicy Include="ParentPackage.Example"
+                 Tag="FluentValidationSkill"
+                 Disable="true" />
 </ItemGroup>
 ```
 
-Absolute path opt-in:
+Meaning:
+
+- `Include`
+  The package id
+- `Tag`
+  The tag declared by the parent package
+- `Disable="true"`
+  Stops future synchronization for that tag
+
+Disable is intentionally conservative:
+
+- existing copied files are not deleted
+- missing files are not restored
+- future overwrites stop
+
+## Relative and Absolute Destinations
+
+By default, destination paths are treated as relative to the detected repository root.
+
+If a consumer wants a specific tag to use an absolute destination instead, they can opt in explicitly:
 
 ```xml
 <ItemGroup>
-  <PayloadPolicy Include="ParentPackage.Example" Tag="FluentValidationSkill" PathKind="Absolute" />
+  <PayloadPolicy Include="ParentPackage.Example"
+                 Tag="FluentValidationSkill"
+                 PathKind="Absolute" />
 </ItemGroup>
 ```
 
-`PathKind` is optional. Supported values are `Relative` and `Absolute`.
+Supported values:
 
-- `Relative` is the default and requires `TargetPath` to stay non-rooted
-- `Absolute` allows rooted `TargetPath` values and does not depend on repository-root detection
+- `Relative`
+- `Absolute`
 
-## Included Projects
+Rules:
 
-- `src/Payload` - the shared build package scaffold
-- `samples/ParentPackage.Example` - example parent package that ships a skill
-- `samples/ConsumerApp` - example consumer with opt-out
+- `Relative` is the default
+- rooted `TargetPath` values are rejected unless `PathKind="Absolute"`
+- `Absolute` requires a rooted `TargetPath`
+- absolute-path payloads do not depend on repository-root detection
 
-## Status
+## How Repository Root Detection Works
 
-The current implementation is working end to end:
+Relative destinations are resolved from a detected repository root.
 
-- `Payload` targets `netstandard2.0`
-- parent package assets and transitive `.targets` files are generated during pack
-- consumer builds import `Payload` through `buildTransitive`
-- file and directory payloads are copied relative to a detected repository root
-- absolute destination paths are supported through `PayloadPolicy PathKind="Absolute"`
-- consumer policies disable copying per `PackageId + Tag`
-- the repo has unit and integration coverage with TUnit
-- the `Payload` package readme is wired to the repository root `README.md`
+Payload walks upward from the consuming project directory and looks for practical repository markers such as:
 
-Typical verification command:
+- `.git`
+- `.hg`
+- `.svn`
+- `.vs`
+- `.idea`
+- `*.sln`
+- `*.slnx`
 
-```bash
-dotnet run --project tests/Payload.Tests/Payload.Tests.csproj -- --disable-logo
+Consumers can bypass detection completely:
+
+```xml
+<PropertyGroup>
+  <PayloadRootDirectory>/path/to/repo/root</PayloadRootDirectory>
+</PropertyGroup>
 ```
 
-## Remaining Backlog
+If root detection fails for a relative payload, Payload warns and skips the copy rather than guessing.
 
-- package readme polish for produced NuGet packages
+## Copy Behavior
+
+When copying is enabled:
+
+- file sources copy as files
+- directory sources copy recursively
+- local modifications are not treated as a supported customization model
+- package-provided content may overwrite local files while synchronization remains enabled
+
+Copy decisions follow this order:
+
+1. destination missing -> copy
+2. file size differs -> copy
+3. file size equal -> compare SHA-256
+4. hash differs -> copy
+5. hash equal -> skip
+
+This avoids relying on modified timestamps and works for text files, binaries, docs, and assets.
+
+## Generated Package Layout
+
+When a parent package references Payload and packs successfully, Payload generates:
+
+- `build/<PackageId>.targets`
+- `buildTransitive/<PackageId>.targets`
+- packaged authored content under `payload/...`
+
+That means the authoring package does not need to hand-maintain its own `.targets` file just to expose the bundled content.
+
+## Example
+
+This repository includes an end-to-end sample flow:
+
+- [src/Payload](src/Payload)
+  The build package itself
+- [samples/ParentPackage.Example](samples/ParentPackage.Example)
+  A parent package that ships a skill folder
+- [samples/ConsumerApp](samples/ConsumerApp)
+  A consumer that references the parent package and can opt out via `PayloadPolicy`
