@@ -84,7 +84,8 @@ jobs:
           shopt -s nullglob
 
           for package in artifacts/nuget/*.nupkg; do
-            if [[ "$package" == *.snupkg ]]; then
+            file_name="$(basename "$package")"
+            if [[ "$file_name" == *.snupkg ]]; then
               continue
             fi
 
