@@ -20,7 +20,7 @@ internal sealed class PolicyMap
             var packageId = item.ItemSpec;
             var tag = item.GetMetadata("Tag");
             var copyOnBuildRaw = item.GetMetadata("CopyOnBuild");
-            var pathKind = item.GetMetadata("PathKind");
+            var overridePath = item.GetMetadata("OverridePath");
 
             if (string.IsNullOrWhiteSpace(packageId) || string.IsNullOrWhiteSpace(tag))
             {
@@ -28,7 +28,7 @@ internal sealed class PolicyMap
             }
 
             bool? copyOnBuild = TryParseCopyOnBuild(copyOnBuildRaw, out var parsedCopyOnBuild) ? parsedCopyOnBuild : null;
-            map[(packageId, tag)] = new PolicyState(copyOnBuild, copyOnBuildRaw, TryParsePathKind(pathKind, out var parsedPathKind) ? parsedPathKind : null, pathKind);
+            map[(packageId, tag)] = new PolicyState(copyOnBuild, copyOnBuildRaw, overridePath);
         }
 
         return new PolicyMap(map);
@@ -48,22 +48,17 @@ internal sealed class PolicyMap
         return false;
     }
 
-    public bool TryGetPathKind(string packageId, string tag, out PathKind? pathKind, out string? rawPathKind)
+    public bool TryGetOverridePath(string packageId, string tag, out string? overridePath)
     {
         if (_policyMap.TryGetValue((packageId, tag), out var policy))
         {
-            pathKind = policy.PathKind;
-            rawPathKind = policy.RawPathKind;
+            overridePath = policy.OverridePath;
             return true;
         }
 
-        pathKind = null;
-        rawPathKind = null;
+        overridePath = null;
         return false;
     }
-
-    private static bool TryParsePathKind(string? value, out PathKind pathKind)
-        => Enum.TryParse(value, ignoreCase: true, out pathKind);
 
     private static bool TryParseCopyOnBuild(string? value, out bool copyOnBuild)
     {
@@ -84,5 +79,5 @@ internal sealed class PolicyMap
                ^ StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Tag);
     }
 
-    private sealed record PolicyState(bool? CopyOnBuild, string? RawCopyOnBuild, PathKind? PathKind, string? RawPathKind);
+    private sealed record PolicyState(bool? CopyOnBuild, string? RawCopyOnBuild, string? OverridePath);
 }

@@ -120,29 +120,20 @@ public sealed class CopyRepoContentTask : Microsoft.Build.Utilities.Task
     {
         destinationRoot = string.Empty;
 
-        policies.TryGetPathKind(packageId, tag, out var configuredPathKind, out var rawPathKind);
-
-        if (!TryResolvePathKind(packageId, tag, configuredPathKind, rawPathKind, out var pathKind))
-        {
-            return false;
-        }
-
-        if (pathKind == PathKind.Absolute)
-        {
-            if (!Path.IsPathRooted(targetPath))
-            {
-                Log.LogWarning($"RepoContentCopy: '{packageId}' tag '{tag}' uses PathKind='{PathKind.Absolute}' but TargetPath '{targetPath}' is not rooted. Skipping.");
-                return false;
-            }
-
-            destinationRoot = Path.GetFullPath(targetPath);
-            return true;
-        }
-
         if (Path.IsPathRooted(targetPath))
         {
-            Log.LogWarning($"RepoContentCopy: '{packageId}' tag '{tag}' has rooted TargetPath '{targetPath}' but PathKind is '{PathKind.Relative}'. Set PayloadPolicy PathKind=\"{PathKind.Absolute}\" to allow absolute destinations. Skipping.");
+            Log.LogWarning($"RepoContentCopy: '{packageId}' tag '{tag}' has absolute TargetPath '{targetPath}'. TargetPath must always be relative. Use PayloadPolicy OverridePath to change the destination base path. Skipping.");
             return false;
+        }
+
+        if (policies.TryGetOverridePath(packageId, tag, out var overridePath) && !string.IsNullOrWhiteSpace(overridePath))
+        {
+            destinationRoot = Path.IsPathRooted(overridePath)
+                ? Path.GetFullPath(overridePath)
+                : Path.GetFullPath(Path.Combine(ProjectDirectory, overridePath));
+
+            destinationRoot = Path.Combine(destinationRoot, targetPath);
+            return true;
         }
 
         if (!repoRootAttempted)
@@ -195,25 +186,6 @@ public sealed class CopyRepoContentTask : Microsoft.Build.Utilities.Task
         }
 
         return true;
-    }
-
-    private bool TryResolvePathKind(string packageId, string tag, PathKind? configuredPathKind, string? rawPathKind, out PathKind resolvedPathKind)
-    {
-        resolvedPathKind = PathKind.Relative;
-
-        if (configuredPathKind.HasValue)
-        {
-            resolvedPathKind = configuredPathKind.Value;
-            return true;
-        }
-
-        if (string.IsNullOrWhiteSpace(rawPathKind))
-        {
-            return true;
-        }
-
-        Log.LogWarning($"RepoContentCopy: '{packageId}' tag '{tag}' has unsupported PathKind '{rawPathKind}'. Supported values are '{PathKind.Relative}' and '{PathKind.Absolute}'. Skipping.");
-        return false;
     }
 
     private static bool TryParseCopyOnBuild(string? value, out bool copyOnBuild)

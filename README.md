@@ -23,7 +23,7 @@ Payload is intentionally narrow. It lets a parent package declare bundled conten
 - Copy decisions use file size plus SHA-256, not timestamps
 - Parent-package `.targets` are generated automatically during pack
 - Repository root detection is built in, with explicit override via `PayloadRootDirectory`
-- Consumer policies support both relative and absolute destination handling through `PathKind`
+- Consumer policies can override the destination base path through `OverridePath`
 
 ## Installation
 
@@ -155,31 +155,33 @@ Consumer-side `PayloadPolicy` is different. A file-based app does not have an in
 </Project>
 ```
 
-## Relative and Absolute Destinations
+## Destination Resolution
 
 By default, destination paths are treated as relative to the detected repository root.
 
-If a consumer wants a specific tag to use an absolute destination instead, they can opt in explicitly:
+If a consumer wants a specific tag to use a different destination base path, they can set `OverridePath` on `PayloadPolicy`:
 
 ```xml
 <ItemGroup>
   <PayloadPolicy Include="ParentPackage"
                  Tag="ExampleSkill"
-                 PathKind="Absolute" />
+                 OverridePath="/Users/david/custom-root" />
 </ItemGroup>
 ```
 
-Supported values:
-
-- `Relative`
-- `Absolute`
-
 Rules:
 
-- `Relative` is the default
-- rooted `TargetPath` values are rejected unless `PathKind="Absolute"`
-- `Absolute` requires a rooted `TargetPath`
-- absolute-path payloads do not depend on repository-root detection
+- parent-authored `TargetPath` is always relative
+- absolute `TargetPath` values are rejected with a warning
+- if `OverridePath` is omitted, Payload uses the detected repository root or `PayloadRootDirectory`
+- if `OverridePath` is present and rooted, it becomes the destination base path
+- if `OverridePath` is present and relative, it is resolved relative to the consuming project directory
+
+Example:
+
+- parent `TargetPath`: `.agents/skills/example-skill`
+- consumer `OverridePath`: `/Users/david/custom-root`
+- final destination: `/Users/david/custom-root/.agents/skills/example-skill`
 
 ## How Repository Root Detection Works
 

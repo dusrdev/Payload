@@ -276,7 +276,7 @@ public class CopyRepoContentTaskTests
     }
 
     [Test]
-    public async Task Execute_Copies_To_Absolute_Target_Path_When_PathKind_Is_Absolute()
+    public async Task Execute_Copies_To_Absolute_OverridePath()
     {
         using var temp = new TemporaryDirectory();
         var sourceFile = Path.Combine(temp.Path, "package", "README.md");
@@ -292,10 +292,10 @@ public class CopyRepoContentTaskTests
 
         var task = CreateTask(projectDirectory, string.Empty,
         [
-            TestTaskItem.Create(sourceFile, ("PackageId", "ParentPackage"), ("Tag", "Docs"), ("TargetPath", absoluteTarget))
+            TestTaskItem.Create(sourceFile, ("PackageId", "ParentPackage"), ("Tag", "Docs"), ("TargetPath", "docs/README.md"))
         ],
         [
-            TestTaskItem.Create("ParentPackage", ("Tag", "Docs"), ("PathKind", "Absolute"))
+            TestTaskItem.Create("ParentPackage", ("Tag", "Docs"), ("OverridePath", absoluteRoot))
         ]);
 
         await Assert.That(task.Execute()).IsTrue();
@@ -304,40 +304,34 @@ public class CopyRepoContentTaskTests
     }
 
     [Test]
-    public async Task Execute_Skips_Rooted_Target_Path_When_PathKind_Is_Not_Absolute()
+    public async Task Execute_Copies_To_Relative_OverridePath_From_Project_Directory()
     {
         using var temp = new TemporaryDirectory();
         var sourceFile = Path.Combine(temp.Path, "package", "README.md");
         Directory.CreateDirectory(Path.GetDirectoryName(sourceFile)!);
         await File.WriteAllTextAsync(sourceFile, "payload");
 
-        var absoluteTarget = Path.Combine(temp.Path, "absolute", "docs", "README.md");
-
         var repoRoot = Path.Combine(temp.Path, "repo");
         Directory.CreateDirectory(repoRoot);
         var projectDirectory = Path.Combine(repoRoot, "src", "Consumer");
         Directory.CreateDirectory(projectDirectory);
+        var overrideRoot = Path.Combine(projectDirectory, "custom-root");
 
-        var engine = new RecordingBuildEngine();
-        var task = new CopyRepoContentTask
-        {
-            BuildEngine = engine,
-            ProjectDirectory = projectDirectory,
-            RootDirectory = repoRoot,
-            PayloadContentItems =
-            [
-                TestTaskItem.Create(sourceFile, ("PackageId", "ParentPackage"), ("Tag", "Docs"), ("TargetPath", absoluteTarget))
-            ],
-            PayloadPolicies = []
-        };
+        var task = CreateTask(projectDirectory, repoRoot,
+        [
+            TestTaskItem.Create(sourceFile, ("PackageId", "ParentPackage"), ("Tag", "Docs"), ("TargetPath", "docs/README.md"))
+        ],
+        [
+            TestTaskItem.Create("ParentPackage", ("Tag", "Docs"), ("OverridePath", "custom-root"))
+        ]);
 
         await Assert.That(task.Execute()).IsTrue();
-        await Assert.That(File.Exists(absoluteTarget)).IsFalse();
-        await Assert.That(engine.Warnings.Any(x => (x.Message ?? string.Empty).Contains("PathKind", StringComparison.Ordinal))).IsTrue();
+        await Assert.That(File.Exists(Path.Combine(overrideRoot, "docs", "README.md"))).IsTrue();
+        await Assert.That(await File.ReadAllTextAsync(Path.Combine(overrideRoot, "docs", "README.md"))).IsEqualTo("payload");
     }
 
     [Test]
-    public async Task Execute_Skips_Absolute_PathKind_When_Target_Path_Is_Not_Rooted()
+    public async Task Execute_Skips_Rooted_TargetPath_Even_When_OverridePath_Is_Provided()
     {
         using var temp = new TemporaryDirectory();
         var sourceFile = Path.Combine(temp.Path, "package", "README.md");
@@ -355,17 +349,17 @@ public class CopyRepoContentTaskTests
             RootDirectory = string.Empty,
             PayloadContentItems =
             [
-                TestTaskItem.Create(sourceFile, ("PackageId", "ParentPackage"), ("Tag", "Docs"), ("TargetPath", "docs/README.md"))
+                TestTaskItem.Create(sourceFile, ("PackageId", "ParentPackage"), ("Tag", "Docs"), ("TargetPath", Path.Combine(temp.Path, "absolute", "docs", "README.md")))
             ],
             PayloadPolicies =
             [
-                TestTaskItem.Create("ParentPackage", ("Tag", "Docs"), ("PathKind", "Absolute"))
+                TestTaskItem.Create("ParentPackage", ("Tag", "Docs"), ("OverridePath", Path.Combine(temp.Path, "custom-root")))
             ]
         };
 
         await Assert.That(task.Execute()).IsTrue();
-        await Assert.That(File.Exists(Path.Combine(temp.Path, "docs", "README.md"))).IsFalse();
-        await Assert.That(engine.Warnings.Any(x => (x.Message ?? string.Empty).Contains("not rooted", StringComparison.OrdinalIgnoreCase))).IsTrue();
+        await Assert.That(File.Exists(Path.Combine(temp.Path, "absolute", "docs", "README.md"))).IsFalse();
+        await Assert.That(engine.Warnings.Any(x => (x.Message ?? string.Empty).Contains("TargetPath must always be relative", StringComparison.OrdinalIgnoreCase))).IsTrue();
     }
 
     private static CopyRepoContentTask CreateTask(

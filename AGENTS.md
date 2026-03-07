@@ -45,7 +45,7 @@ Consumer policy item shape:
 - metadata or attributes:
   - `Tag`
   - `CopyOnBuild`
-  - `PathKind`
+  - `OverridePath`
 
 The item `Include` is the `PackageId`.
 
@@ -100,15 +100,15 @@ Do not fall back silently to some arbitrary path.
 
 For version one, parent package authors declare only `TargetPath`.
 
-Consumer-side `PathKind` belongs on `PayloadPolicy`.
+Consumer-side `OverridePath` belongs on `PayloadPolicy`.
 
 Current behavior:
 
-- consumer paths are relative by default
-- consumer projects may opt a tag into absolute destination handling with `PathKind="Absolute"`
-- supported `PathKind` values are `Relative` and `Absolute`
-- if `PathKind` is `Relative`, rooted `TargetPath` values are skipped with a warning
-- if `PathKind` is `Absolute`, non-rooted `TargetPath` values are skipped with a warning
+- parent-authored `TargetPath` is always relative
+- absolute `TargetPath` values are skipped with a warning
+- consumer projects may set `OverridePath` on a policy to replace the default destination base path
+- `OverridePath` may be absolute or relative
+- relative `OverridePath` values are resolved relative to the consuming project directory
 
 ### File comparison
 
@@ -204,11 +204,11 @@ A consumer may declare policies such as:
 </ItemGroup>
 ```
 
-Or opt a tag into absolute destination handling:
+Or override the destination base path for a tag:
 
 ```xml
 <ItemGroup>
-  <PayloadPolicy Include="ParentPackage" Tag="ExampleSkill" PathKind="Absolute" />
+  <PayloadPolicy Include="ParentPackage" Tag="ExampleSkill" OverridePath="/Users/david/custom-root" />
 </ItemGroup>
 ```
 

@@ -55,17 +55,16 @@ public class PolicyMapTests
     }
 
     [Test]
-    public async Task Create_Returns_PathKind_For_Matching_Package_And_Tag()
+    public async Task Create_Returns_OverridePath_For_Matching_Package_And_Tag()
     {
         var map = PolicyMap.Create(
         [
-            TestTaskItem.Create("ParentPackage", ("Tag", "Docs"), (nameof(PathKind), nameof(PathKind.Absolute)))
+            TestTaskItem.Create("ParentPackage", ("Tag", "Docs"), ("OverridePath", "custom/root"))
         ]);
 
-        var found = map.TryGetPathKind("parentpackage", "docs", out var pathKind, out var rawPathKind);
+        var found = map.TryGetOverridePath("parentpackage", "docs", out var overridePath);
 
         await Assert.That(found).IsTrue();
-        await Assert.That(pathKind).IsEqualTo(PathKind.Absolute);
-        await Assert.That(rawPathKind).IsEqualTo(nameof(PathKind.Absolute));
+        await Assert.That(overridePath).IsEqualTo("custom/root");
     }
 }
