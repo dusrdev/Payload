@@ -212,6 +212,8 @@ Or opt a tag into absolute destination handling:
 </ItemGroup>
 ```
 
+For file-based apps that use `#:package`, `Payload` still runs, but consumer-side `PayloadPolicy` should be declared in a sidecar `Directory.Build.targets` file because the `.cs` file does not provide an `ItemGroup` surface.
+
 ## Immediate implementation priorities
 
 1. get the XML contract stable

@@ -116,6 +116,45 @@ and a consumer can opt in explicitly:
                CopyOnBuild="true" />
 ```
 
+## File-Based Apps
+
+Payload also works with file-based apps that use `#:package`.
+
+For example:
+
+```csharp
+#!/usr/bin/dotnet run
+#:sdk Microsoft.NET.Sdk
+#:package ParentPackage@0.1.0-alpha
+
+Console.WriteLine("Hello");
+```
+
+The parent package's `buildTransitive` targets still flow in, so bundled `PayloadContent` can be copied during build.
+
+There are two practical constraints:
+
+- Relative `TargetPath` values still need a detectable repo root such as `.git`, `.hg`, `.svn`, `.vs`, `.idea`, `*.sln`, or `*.slnx`
+- if that is not available, set `PayloadRootDirectory` explicitly with a file-based app property directive
+
+Example:
+
+```csharp
+#:property PayloadRootDirectory=.
+```
+
+Consumer-side `PayloadPolicy` is different. A file-based app does not have an inline `ItemGroup` surface, so `PayloadPolicy` should be declared from a sidecar `Directory.Build.targets` file placed next to the `.cs` file or in a parent directory:
+
+```xml
+<Project>
+  <ItemGroup>
+    <PayloadPolicy Include="ParentPackage"
+                   Tag="ExampleSkill"
+                   CopyOnBuild="false" />
+  </ItemGroup>
+</Project>
+```
+
 ## Relative and Absolute Destinations
 
 By default, destination paths are treated as relative to the detected repository root.
