@@ -26,7 +26,7 @@
 
     <PackageId>Payload</PackageId>
     <Title>Payload</Title>
-    <Version>1.0.0-alpha</Version>
+    <Version>1.0.0-rc1</Version>
     <Authors>David Shnayder</Authors>
     <Description>Build-time helper for copying parent-package bundled content into a consumer repository.</Description>
     <Copyright>David Shnayder</Copyright>
