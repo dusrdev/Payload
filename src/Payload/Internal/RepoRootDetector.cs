@@ -5,17 +5,15 @@ namespace Payload.Internal;
 
 internal static class RepoRootDetector
 {
-    private static readonly string[] VcsMarkers =
+    private static readonly MarkerProbe[] Markers =
     [
-        ".git",
-        ".svn",
-        ".hg"
-    ];
-
-    private static readonly string[] IdeMarkers =
-    [
-        ".vs",
-        ".idea"
+        new(".git", 0, MarkerMatchMode.Path),
+        new(".svn", 0, MarkerMatchMode.Path),
+        new(".hg", 0, MarkerMatchMode.Path),
+        new(".vs", 1, MarkerMatchMode.Path),
+        new(".idea", 1, MarkerMatchMode.Path),
+        new("*.sln", 2, MarkerMatchMode.SearchPattern),
+        new("*.slnx", 2, MarkerMatchMode.SearchPattern)
     ];
 
     public static string? TryResolve(string projectDirectory, string rootDirectory, TaskLoggingHelper log)
@@ -39,9 +37,7 @@ internal static class RepoRootDetector
         }
 
         var fullPath = Path.GetFullPath(projectDirectory);
-        var detectedRoot = FindDirectoryWithMarker(fullPath, VcsMarkers)
-            ?? FindDirectoryWithMarker(fullPath, IdeMarkers)
-            ?? FindDirectoryWithSolution(fullPath);
+        var detectedRoot = FindDirectoryWithMarker(fullPath);
 
         if (detectedRoot is not null)
         {
@@ -51,16 +47,34 @@ internal static class RepoRootDetector
         return detectedRoot;
     }
 
-    private static string? FindDirectoryWithMarker(string startDirectory, IEnumerable<string> markers)
+    private static string? FindDirectoryWithMarker(string startDirectory)
     {
+        string? bestMatch = null;
+        var bestPriority = int.MaxValue;
+
         for (var current = new DirectoryInfo(startDirectory); current is not null; current = current.Parent)
         {
             try
             {
-                if (markers.Any(marker => Directory.Exists(Path.Combine(current.FullName, marker))
-                                          || File.Exists(Path.Combine(current.FullName, marker))))
+                foreach (var marker in Markers)
                 {
-                    return current.FullName;
+                    if (!marker.IsMatch(current.FullName))
+                    {
+                        continue;
+                    }
+
+                    if (marker.Priority >= bestPriority)
+                    {
+                        continue;
+                    }
+
+                    bestMatch = current.FullName;
+                    bestPriority = marker.Priority;
+
+                    if (bestPriority == 0)
+                    {
+                        return bestMatch;
+                    }
                 }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -69,27 +83,20 @@ internal static class RepoRootDetector
             }
         }
 
-        return null;
+        return bestMatch;
     }
 
-    private static string? FindDirectoryWithSolution(string startDirectory)
+    private enum MarkerMatchMode
     {
-        for (var current = new DirectoryInfo(startDirectory); current is not null; current = current.Parent)
-        {
-            try
-            {
-                if (Directory.EnumerateFiles(current.FullName, "*.sln", SearchOption.TopDirectoryOnly).Any()
-                    || Directory.EnumerateFiles(current.FullName, "*.slnx", SearchOption.TopDirectoryOnly).Any())
-                {
-                    return current.FullName;
-                }
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                // Ignore inaccessible directories and keep walking up.
-            }
-        }
+        Path,
+        SearchPattern
+    }
 
-        return null;
+    private sealed record MarkerProbe(string Value, int Priority, MarkerMatchMode Mode)
+    {
+        public bool IsMatch(string directoryPath)
+            => Mode == MarkerMatchMode.Path
+                ? Directory.Exists(Path.Combine(directoryPath, Value)) || File.Exists(Path.Combine(directoryPath, Value))
+                : Directory.EnumerateFiles(directoryPath, Value, SearchOption.TopDirectoryOnly).Any();
     }
 }

@@ -48,6 +48,24 @@ public class RepoRootDetectorTests
         await Assert.That(result).IsEqualTo(Path.GetFullPath(repoRoot));
     }
 
+    [Test]
+    public async System.Threading.Tasks.Task TryResolve_Prefers_Higher_Priority_Marker_Over_Closer_Lower_Priority_Marker()
+    {
+        using var workspace = new TemporaryDirectory();
+        var repoRoot = workspace.Path;
+        Directory.CreateDirectory(Path.Combine(repoRoot, ".git"));
+
+        var childRoot = Path.Combine(repoRoot, "src");
+        Directory.CreateDirectory(Path.Combine(childRoot, ".idea"));
+
+        var projectDirectory = Path.Combine(childRoot, "ConsumerApp");
+        Directory.CreateDirectory(projectDirectory);
+
+        var result = RepoRootDetector.TryResolve(projectDirectory, string.Empty, CreateLogger());
+
+        await Assert.That(result).IsEqualTo(Path.GetFullPath(repoRoot));
+    }
+
     private static TaskLoggingHelper CreateLogger()
         => new(new TestLoggingTask { BuildEngine = new RecordingBuildEngine() });
 
