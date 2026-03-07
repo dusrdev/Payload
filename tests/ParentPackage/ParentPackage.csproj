@@ -14,7 +14,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Payload" Version="1.0.0-rc1" />
+    <PackageReference Include="Payload" Version="1.0.0-rc2" />
   </ItemGroup>
 
   <ItemGroup>
