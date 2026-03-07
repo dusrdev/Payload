@@ -45,13 +45,12 @@ public sealed class CopyRepoContentTask : Microsoft.Build.Utilities.Task
         try
         {
             var policies = PolicyMap.Create(PayloadPolicies);
-            var parentCopyOnBuild = BuildParentCopyOnBuildMap(PayloadContentItems);
-            string? repoRoot = null;
-            var repoRootAttempted = false;
+            var parentCopyOnBuild = BuildParentCopyOnBuildMap(PayloadContentItems, PayloadRemoveItems);
+            var executionPlans = BuildExecutionPlans(policies, parentCopyOnBuild);
 
             foreach (var item in PayloadContentItems)
             {
-                if (!TryResolveContentItem(item, policies, ref repoRoot, ref repoRootAttempted, out var sourcePath, out var destinationPath))
+                if (!TryResolveContentWorkItem(item, executionPlans, out var sourcePath, out var destinationPath))
                 {
                     continue;
                 }
@@ -76,7 +75,7 @@ public sealed class CopyRepoContentTask : Microsoft.Build.Utilities.Task
 
             foreach (var item in PayloadRemoveItems)
             {
-                if (!TryResolveRemoveItem(item, policies, parentCopyOnBuild, ref repoRoot, ref repoRootAttempted, out var packageId, out var tag, out var destinationBasePath, out var destinationPath))
+                if (!TryResolveRemoveWorkItem(item, executionPlans, out var packageId, out var tag, out var destinationBasePath, out var destinationPath))
                 {
                     continue;
                 }
@@ -107,102 +106,160 @@ public sealed class CopyRepoContentTask : Microsoft.Build.Utilities.Task
         }
     }
 
-    private static Dictionary<(string PackageId, string Tag), string?> BuildParentCopyOnBuildMap(IEnumerable<ITaskItem> items)
+    private Dictionary<(string PackageId, string Tag), TagExecutionPlan> BuildExecutionPlans(
+        PolicyMap policies,
+        IReadOnlyDictionary<(string PackageId, string Tag), ParentCopyOnBuildState> parentCopyOnBuild)
     {
-        var map = new Dictionary<(string PackageId, string Tag), string?>(ParentTagComparer.OrdinalIgnoreCase);
+        var plans = new Dictionary<(string PackageId, string Tag), TagExecutionPlan>(ParentTagComparer.OrdinalIgnoreCase);
+        string? repoRoot = null;
+        var repoRootAttempted = false;
 
-        foreach (var item in items)
+        foreach (var key in EnumerateTagKeys(PayloadContentItems, PayloadRemoveItems))
         {
-            var packageId = item.GetMetadata("PackageId");
-            var tag = item.GetMetadata("Tag");
+            plans[key] = CreateExecutionPlan(key.PackageId, key.Tag, policies, parentCopyOnBuild, ref repoRoot, ref repoRootAttempted);
+        }
 
-            if (string.IsNullOrWhiteSpace(packageId) || string.IsNullOrWhiteSpace(tag))
-            {
-                continue;
-            }
+        return plans;
+    }
 
-            var copyOnBuild = item.GetMetadata("CopyOnBuild");
-            if (!string.IsNullOrWhiteSpace(copyOnBuild))
+    private static IEnumerable<(string PackageId, string Tag)> EnumerateTagKeys(params ITaskItem[][] itemGroups)
+    {
+        var seen = new HashSet<(string PackageId, string Tag)>(ParentTagComparer.OrdinalIgnoreCase);
+
+        foreach (var items in itemGroups)
+        {
+            foreach (var item in items)
             {
-                map[(packageId, tag)] = copyOnBuild;
+                var packageId = item.GetMetadata("PackageId");
+                var tag = item.GetMetadata("Tag");
+
+                if (string.IsNullOrWhiteSpace(packageId) || string.IsNullOrWhiteSpace(tag))
+                {
+                    continue;
+                }
+
+                if (seen.Add((packageId, tag)))
+                {
+                    yield return (packageId, tag);
+                }
             }
         }
+    }
+
+    private TagExecutionPlan CreateExecutionPlan(
+        string packageId,
+        string tag,
+        PolicyMap policies,
+        IReadOnlyDictionary<(string PackageId, string Tag), ParentCopyOnBuildState> parentCopyOnBuild,
+        ref string? repoRoot,
+        ref bool repoRootAttempted)
+    {
+        parentCopyOnBuild.TryGetValue((packageId, tag), out var parentState);
+
+        if (!TryResolveCopyOnBuild(packageId, tag, parentState, policies, out var shouldCopyOnBuild))
+        {
+            return TagExecutionPlan.Blocked(packageId, tag);
+        }
+
+        if (!shouldCopyOnBuild)
+        {
+            Log.LogMessage(MessageImportance.Low, $"RepoContentCopy: '{packageId}' tag '{tag}' has CopyOnBuild='false'. Skipping.");
+            return TagExecutionPlan.Disabled(packageId, tag);
+        }
+
+        if (!TryResolveDestinationBasePath(packageId, tag, policies, ref repoRoot, ref repoRootAttempted, out var destinationBasePath))
+        {
+            return TagExecutionPlan.Blocked(packageId, tag);
+        }
+
+        return TagExecutionPlan.Enabled(packageId, tag, destinationBasePath);
+    }
+
+    private static Dictionary<(string PackageId, string Tag), ParentCopyOnBuildState> BuildParentCopyOnBuildMap(
+        IEnumerable<ITaskItem> payloadContentItems,
+        IEnumerable<ITaskItem> payloadRemoveItems)
+    {
+        var map = new Dictionary<(string PackageId, string Tag), ParentCopyOnBuildState>(ParentTagComparer.OrdinalIgnoreCase);
+
+        AddParentCopyOnBuildItems(map, payloadContentItems);
+        AddParentCopyOnBuildItems(map, payloadRemoveItems);
 
         return map;
     }
 
-    private bool TryResolveContentItem(
+    private static void AddParentCopyOnBuildItems(
+        IDictionary<(string PackageId, string Tag), ParentCopyOnBuildState> map,
+        IEnumerable<ITaskItem> items)
+    {
+        foreach (var item in items)
+        {
+            var packageId = item.GetMetadata("PackageId");
+            var tag = item.GetMetadata("Tag");
+            var rawCopyOnBuild = item.GetMetadata("CopyOnBuild");
+
+            if (string.IsNullOrWhiteSpace(packageId) || string.IsNullOrWhiteSpace(tag) || string.IsNullOrWhiteSpace(rawCopyOnBuild))
+            {
+                continue;
+            }
+
+            var key = (packageId, tag);
+            if (!map.TryGetValue(key, out var state))
+            {
+                map[key] = new ParentCopyOnBuildState(rawCopyOnBuild, HasConflict: false);
+                continue;
+            }
+
+            if (!string.Equals(state.RawValue, rawCopyOnBuild, StringComparison.OrdinalIgnoreCase))
+            {
+                map[key] = state with { HasConflict = true };
+            }
+        }
+    }
+
+    private bool TryResolveContentWorkItem(
         ITaskItem item,
-        PolicyMap policies,
-        ref string? repoRoot,
-        ref bool repoRootAttempted,
+        IReadOnlyDictionary<(string PackageId, string Tag), TagExecutionPlan> executionPlans,
         out string sourcePath,
         out string destinationPath)
     {
         sourcePath = item.ItemSpec;
         destinationPath = string.Empty;
 
-        if (!TryGetRequiredMetadata(item, "TargetPath", out var packageId, out var tag, out var targetPath))
+        if (!TryGetRequiredItemValues(item, "TargetPath", out var packageId, out var tag, out var targetPath))
         {
             return false;
         }
 
-        if (!TryResolveCopyOnBuild(packageId, tag, item.GetMetadata("CopyOnBuild"), policies, out var shouldCopyOnBuild))
+        if (Path.IsPathRooted(targetPath))
+        {
+            Log.LogWarning($"RepoContentCopy: '{packageId}' tag '{tag}' has absolute TargetPath '{targetPath}'. TargetPath must always be relative. Use PayloadPolicy OverridePath to change the destination base path. Skipping.");
+            return false;
+        }
+
+        if (!executionPlans.TryGetValue((packageId, tag), out var plan) || !plan.CanExecute)
         {
             return false;
         }
 
-        if (!shouldCopyOnBuild)
-        {
-            Log.LogMessage(MessageImportance.Low, $"RepoContentCopy: '{packageId}' tag '{tag}' has CopyOnBuild='false'. Skipping.");
-            return false;
-        }
-
-        if (!TryResolveDestinationPath(packageId, tag, targetPath, policies, ref repoRoot, ref repoRootAttempted, out destinationPath))
-        {
-            return false;
-        }
-
+        destinationPath = Path.Combine(plan.DestinationBasePath!, targetPath);
         return true;
     }
 
-    private bool TryResolveRemoveItem(
+    private bool TryResolveRemoveWorkItem(
         ITaskItem item,
-        PolicyMap policies,
-        Dictionary<(string PackageId, string Tag), string?> parentCopyOnBuild,
-        ref string? repoRoot,
-        ref bool repoRootAttempted,
+        IReadOnlyDictionary<(string PackageId, string Tag), TagExecutionPlan> executionPlans,
         out string packageId,
         out string tag,
         out string destinationBasePath,
         out string destinationPath)
     {
-        destinationBasePath = string.Empty;
-        destinationPath = string.Empty;
         packageId = string.Empty;
         tag = string.Empty;
+        destinationBasePath = string.Empty;
+        destinationPath = string.Empty;
 
-        var removePath = item.ItemSpec;
-        if (string.IsNullOrWhiteSpace(removePath))
+        if (!TryGetRequiredItemValues(item, "Include", out packageId, out tag, out var removePath))
         {
-            Log.LogWarning("RepoContentCopy: PayloadRemove item is missing Include. Skipping.");
-            return false;
-        }
-
-        if (!TryGetRequiredMetadata(item, "Include", out packageId, out tag, out _))
-        {
-            return false;
-        }
-
-        parentCopyOnBuild.TryGetValue((packageId, tag), out var parentCopyOnBuildRaw);
-        if (!TryResolveCopyOnBuild(packageId, tag, parentCopyOnBuildRaw, policies, out var shouldCopyOnBuild))
-        {
-            return false;
-        }
-
-        if (!shouldCopyOnBuild)
-        {
-            Log.LogMessage(MessageImportance.Low, $"RepoContentCopy: '{packageId}' tag '{tag}' has CopyOnBuild='false'. Skipping removals.");
             return false;
         }
 
@@ -212,16 +269,17 @@ public sealed class CopyRepoContentTask : Microsoft.Build.Utilities.Task
             return false;
         }
 
-        if (!TryResolveDestinationBasePath(packageId, tag, removePath, policies, ref repoRoot, ref repoRootAttempted, out destinationBasePath))
+        if (!executionPlans.TryGetValue((packageId, tag), out var plan) || !plan.CanExecute)
         {
             return false;
         }
 
+        destinationBasePath = plan.DestinationBasePath!;
         destinationPath = Path.Combine(destinationBasePath, removePath);
         return true;
     }
 
-    private bool TryGetRequiredMetadata(ITaskItem item, string valueName, out string packageId, out string tag, out string value)
+    private bool TryGetRequiredItemValues(ITaskItem item, string valueName, out string packageId, out string tag, out string value)
     {
         packageId = item.GetMetadata("PackageId");
         tag = item.GetMetadata("Tag");
@@ -248,42 +306,15 @@ public sealed class CopyRepoContentTask : Microsoft.Build.Utilities.Task
         return true;
     }
 
-    private bool TryResolveDestinationPath(
-        string packageId,
-        string tag,
-        string targetPath,
-        PolicyMap policies,
-        ref string? repoRoot,
-        ref bool repoRootAttempted,
-        out string destinationPath)
-    {
-        destinationPath = string.Empty;
-
-        if (!TryResolveDestinationBasePath(packageId, tag, targetPath, policies, ref repoRoot, ref repoRootAttempted, out var destinationBasePath))
-        {
-            return false;
-        }
-
-        destinationPath = Path.Combine(destinationBasePath, targetPath);
-        return true;
-    }
-
     private bool TryResolveDestinationBasePath(
         string packageId,
         string tag,
-        string targetPath,
         PolicyMap policies,
         ref string? repoRoot,
         ref bool repoRootAttempted,
         out string destinationBasePath)
     {
         destinationBasePath = string.Empty;
-
-        if (Path.IsPathRooted(targetPath))
-        {
-            Log.LogWarning($"RepoContentCopy: '{packageId}' tag '{tag}' has absolute TargetPath '{targetPath}'. TargetPath must always be relative. Use PayloadPolicy OverridePath to change the destination base path. Skipping.");
-            return false;
-        }
 
         if (policies.TryGetOverridePath(packageId, tag, out var overridePath) && !string.IsNullOrWhiteSpace(overridePath))
         {
@@ -313,7 +344,12 @@ public sealed class CopyRepoContentTask : Microsoft.Build.Utilities.Task
         return true;
     }
 
-    private bool TryResolveCopyOnBuild(string packageId, string tag, string? parentCopyOnBuildRaw, PolicyMap policies, out bool shouldCopyOnBuild)
+    private bool TryResolveCopyOnBuild(
+        string packageId,
+        string tag,
+        ParentCopyOnBuildState? parentState,
+        PolicyMap policies,
+        out bool shouldCopyOnBuild)
     {
         shouldCopyOnBuild = true;
         var hasConsumerPolicy = policies.TryGetCopyOnBuild(packageId, tag, out var consumerCopyOnBuild, out var rawConsumerCopyOnBuild);
@@ -329,15 +365,21 @@ public sealed class CopyRepoContentTask : Microsoft.Build.Utilities.Task
             Log.LogWarning($"RepoContentCopy: '{packageId}' tag '{tag}' has unsupported CopyOnBuild value '{rawConsumerCopyOnBuild}' on PayloadPolicy. Supported values are 'true' and 'false'. Ignoring policy value.");
         }
 
-        if (TryParseCopyOnBuild(parentCopyOnBuildRaw, out var parentCopyOnBuild))
+        if (parentState is not null && parentState.HasConflict)
+        {
+            Log.LogWarning($"RepoContentCopy: '{packageId}' tag '{tag}' has conflicting CopyOnBuild values across parent payload items. Defaulting to 'true'.");
+            return true;
+        }
+
+        if (TryParseCopyOnBuild(parentState?.RawValue, out var parentCopyOnBuild))
         {
             shouldCopyOnBuild = parentCopyOnBuild;
             return true;
         }
 
-        if (!string.IsNullOrWhiteSpace(parentCopyOnBuildRaw))
+        if (!string.IsNullOrWhiteSpace(parentState?.RawValue))
         {
-            Log.LogWarning($"RepoContentCopy: '{packageId}' tag '{tag}' has unsupported CopyOnBuild value '{parentCopyOnBuildRaw}' on PayloadContent. Supported values are 'true' and 'false'. Defaulting to 'true'.");
+            Log.LogWarning($"RepoContentCopy: '{packageId}' tag '{tag}' has unsupported CopyOnBuild value '{parentState!.RawValue}' on parent payload items. Supported values are 'true' and 'false'. Defaulting to 'true'.");
         }
 
         return true;
@@ -388,13 +430,13 @@ public sealed class CopyRepoContentTask : Microsoft.Build.Utilities.Task
         }
     }
 
-    private static void DeleteEmptyParentDirectories(string filePath, string stopDirectory)
+    private static void DeleteEmptyParentDirectories(string filePath, string destinationBasePath)
     {
-        var stopInfo = new DirectoryInfo(Path.GetFullPath(stopDirectory));
+        var destinationBaseInfo = new DirectoryInfo(Path.GetFullPath(destinationBasePath));
 
         for (var directory = new DirectoryInfo(Path.GetDirectoryName(filePath) ?? string.Empty); directory is not null; directory = directory.Parent)
         {
-            if (string.Equals(directory.FullName, stopInfo.FullName, StringComparison.Ordinal))
+            if (string.Equals(directory.FullName, destinationBaseInfo.FullName, StringComparison.Ordinal))
             {
                 break;
             }
@@ -470,5 +512,19 @@ public sealed class CopyRepoContentTask : Microsoft.Build.Utilities.Task
         public int GetHashCode((string PackageId, string Tag) obj)
             => (StringComparer.OrdinalIgnoreCase.GetHashCode(obj.PackageId) * 397)
                ^ StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Tag);
+    }
+
+    private sealed record ParentCopyOnBuildState(string RawValue, bool HasConflict);
+
+    private sealed record TagExecutionPlan(string PackageId, string Tag, bool CanExecute, string? DestinationBasePath)
+    {
+        public static TagExecutionPlan Enabled(string packageId, string tag, string destinationBasePath)
+            => new(packageId, tag, true, destinationBasePath);
+
+        public static TagExecutionPlan Disabled(string packageId, string tag)
+            => new(packageId, tag, false, null);
+
+        public static TagExecutionPlan Blocked(string packageId, string tag)
+            => new(packageId, tag, false, null);
     }
 }

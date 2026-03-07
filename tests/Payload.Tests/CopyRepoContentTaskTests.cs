@@ -273,7 +273,7 @@ public class CopyRepoContentTaskTests
     }
 
     [Test]
-    public async Task Execute_Does_Not_Remove_File_When_Parent_CopyOnBuild_Is_False_And_Consumer_Does_Not_Override()
+    public async Task Execute_Does_Not_Remove_File_When_PayloadRemove_CopyOnBuild_Is_False_And_Consumer_Does_Not_Override()
     {
         using var temp = new TemporaryDirectory();
         var repoRoot = Path.Combine(temp.Path, "repo");
@@ -287,12 +287,10 @@ public class CopyRepoContentTaskTests
         var task = CreateTask(
             projectDirectory,
             repoRoot,
-            [
-                TestTaskItem.Create(Path.Combine(temp.Path, "package", "README.md"), ("PackageId", "ParentPackage"), ("Tag", "ExampleSkill"), ("TargetPath", "docs/README.md"), ("CopyOnBuild", "false"))
-            ],
+            [],
             payloadRemoveItems:
             [
-                TestTaskItem.Create(".agents/skills/example-skill/obsolete.md", ("PackageId", "ParentPackage"), ("Tag", "ExampleSkill"))
+                TestTaskItem.Create(".agents/skills/example-skill/obsolete.md", ("PackageId", "ParentPackage"), ("Tag", "ExampleSkill"), ("CopyOnBuild", "false"))
             ]);
 
         await Assert.That(task.Execute()).IsTrue();
@@ -300,7 +298,34 @@ public class CopyRepoContentTaskTests
     }
 
     [Test]
-    public async Task Execute_Removes_File_When_Parent_CopyOnBuild_Is_False_And_Consumer_Overrides_To_True()
+    public async Task Execute_Removes_File_When_PayloadRemove_CopyOnBuild_Is_False_And_Consumer_Overrides_To_True()
+    {
+        using var temp = new TemporaryDirectory();
+        var repoRoot = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repoRoot);
+        var projectDirectory = Path.Combine(repoRoot, "src", "Consumer");
+        Directory.CreateDirectory(projectDirectory);
+        var obsoleteFile = Path.Combine(repoRoot, ".agents", "skills", "example-skill", "obsolete.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(obsoleteFile)!);
+        await File.WriteAllTextAsync(obsoleteFile, "remove me");
+
+        var task = CreateTask(
+            projectDirectory,
+            repoRoot,
+            [],
+            [
+                TestTaskItem.Create("ParentPackage", ("Tag", "ExampleSkill"), ("CopyOnBuild", "true"))
+            ],
+            [
+                TestTaskItem.Create(".agents/skills/example-skill/obsolete.md", ("PackageId", "ParentPackage"), ("Tag", "ExampleSkill"), ("CopyOnBuild", "false"))
+            ]);
+
+        await Assert.That(task.Execute()).IsTrue();
+        await Assert.That(File.Exists(obsoleteFile)).IsFalse();
+    }
+
+    [Test]
+    public async Task Execute_Warns_And_Defaults_To_True_When_Parent_CopyOnBuild_Conflicts_Across_Tag()
     {
         using var temp = new TemporaryDirectory();
         var sourceFile = Path.Combine(temp.Path, "package", "README.md");
@@ -315,21 +340,26 @@ public class CopyRepoContentTaskTests
         Directory.CreateDirectory(Path.GetDirectoryName(obsoleteFile)!);
         await File.WriteAllTextAsync(obsoleteFile, "remove me");
 
-        var task = CreateTask(
-            projectDirectory,
-            repoRoot,
+        var engine = new RecordingBuildEngine();
+        var task = new CopyRepoContentTask
+        {
+            BuildEngine = engine,
+            ProjectDirectory = projectDirectory,
+            RootDirectory = repoRoot,
+            PayloadContentItems =
             [
                 TestTaskItem.Create(sourceFile, ("PackageId", "ParentPackage"), ("Tag", "ExampleSkill"), ("TargetPath", "docs/README.md"), ("CopyOnBuild", "false"))
             ],
+            PayloadRemoveItems =
             [
-                TestTaskItem.Create("ParentPackage", ("Tag", "ExampleSkill"), ("CopyOnBuild", "true"))
+                TestTaskItem.Create(".agents/skills/example-skill/obsolete.md", ("PackageId", "ParentPackage"), ("Tag", "ExampleSkill"), ("CopyOnBuild", "true"))
             ],
-            [
-                TestTaskItem.Create(".agents/skills/example-skill/obsolete.md", ("PackageId", "ParentPackage"), ("Tag", "ExampleSkill"))
-            ]);
+            PayloadPolicies = []
+        };
 
         await Assert.That(task.Execute()).IsTrue();
         await Assert.That(File.Exists(obsoleteFile)).IsFalse();
+        await Assert.That(engine.Warnings.Any(x => (x.Message ?? string.Empty).Contains("conflicting CopyOnBuild values", StringComparison.OrdinalIgnoreCase))).IsTrue();
     }
 
     [Test]

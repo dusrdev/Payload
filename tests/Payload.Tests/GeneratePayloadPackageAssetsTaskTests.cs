@@ -26,7 +26,7 @@ public class GeneratePayloadPackageAssetsTaskTests
             ],
             PayloadRemoveItems =
             [
-                TestTaskItem.Create(".agents/skills/example-skill/obsolete.md", ("Tag", "ExampleSkill"))
+                TestTaskItem.Create(".agents/skills/example-skill/obsolete.md", ("Tag", "ExampleSkill"), ("CopyOnBuild", "false"))
             ]
         };
 
@@ -91,7 +91,7 @@ public class GeneratePayloadPackageAssetsTaskTests
             ],
             PayloadRemoveItems =
             [
-                TestTaskItem.Create("docs/OLD.md", ("Tag", "Docs"))
+                TestTaskItem.Create("docs/OLD.md", ("Tag", "Docs"), ("CopyOnBuild", "false"))
             ]
         };
 
@@ -99,6 +99,7 @@ public class GeneratePayloadPackageAssetsTaskTests
         var targetsContent = await File.ReadAllTextAsync(task.GeneratedTargetsFile);
         await Assert.That(targetsContent).Contains("<PayloadRemove Include=\"docs/OLD.md\">");
         await Assert.That(targetsContent).Contains("<Tag>Docs</Tag>");
+        await Assert.That(targetsContent).Contains("<CopyOnBuild>false</CopyOnBuild>");
     }
 
     [Test]

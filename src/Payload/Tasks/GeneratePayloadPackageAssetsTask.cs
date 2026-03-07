@@ -74,72 +74,12 @@ public sealed class GeneratePayloadPackageAssetsTask : Microsoft.Build.Utilities
 
             for (var index = 0; index < PayloadContentItems.Length; index++)
             {
-                var item = PayloadContentItems[index];
-                var tag = item.GetMetadata("Tag");
-                var targetPath = item.GetMetadata("TargetPath");
-                var copyOnBuild = item.GetMetadata("CopyOnBuild");
-                var sourcePath = GetSourcePath(item);
-
-                if (string.IsNullOrWhiteSpace(tag))
-                {
-                    Log.LogError($"Payload: authored PayloadContent item '{item.ItemSpec}' is missing Tag metadata.");
-                    hasErrors = true;
-                    continue;
-                }
-
-                if (string.IsNullOrWhiteSpace(targetPath))
-                {
-                    Log.LogError($"Payload: authored PayloadContent item '{item.ItemSpec}' is missing TargetPath metadata.");
-                    hasErrors = true;
-                    continue;
-                }
-
-                if (File.Exists(sourcePath))
-                {
-                    var relativePath = NormalizePath(Path.Combine(index.ToString("D4", CultureInfo.InvariantCulture), Path.GetFileName(sourcePath)));
-                    packFiles.Add(CreatePackFile(sourcePath, relativePath));
-                    generatedEntries.Add(new GeneratedEntry(index, relativePath, tag, copyOnBuild, ItemKind.Content, targetPath));
-                    continue;
-                }
-
-                if (Directory.Exists(sourcePath))
-                {
-                    var relativeRoot = index.ToString("D4", CultureInfo.InvariantCulture);
-                    foreach (var filePath in Directory.EnumerateFiles(sourcePath, "*", SearchOption.AllDirectories))
-                    {
-                        var childRelativePath = NormalizePath(Path.Combine(relativeRoot, Polyfill.GetRelativePath(sourcePath, filePath)));
-                        packFiles.Add(CreatePackFile(filePath, childRelativePath));
-                    }
-
-                    generatedEntries.Add(new GeneratedEntry(index, NormalizePath(relativeRoot), tag, copyOnBuild, ItemKind.Content, targetPath));
-                    continue;
-                }
-
-                Log.LogError($"Payload: authored PayloadContent source '{item.ItemSpec}' does not exist.");
-                hasErrors = true;
+                hasErrors |= !TryAddGeneratedContentEntry(index, PayloadContentItems[index], generatedEntries, packFiles);
             }
 
-            for (var index = 0; index < PayloadRemoveItems.Length; index++)
+            foreach (var item in PayloadRemoveItems)
             {
-                var item = PayloadRemoveItems[index];
-                var tag = item.GetMetadata("Tag");
-                var removePath = item.ItemSpec;
-
-                if (string.IsNullOrWhiteSpace(tag))
-                {
-                    Log.LogError($"Payload: authored PayloadRemove item '{item.ItemSpec}' is missing Tag metadata.");
-                    hasErrors = true;
-                    continue;
-                }
-
-                if (string.IsNullOrWhiteSpace(removePath))
-                {
-                    Log.LogError("Payload: authored PayloadRemove item is missing Include.");
-                    hasErrors = true;
-                    continue;
-                }
-
-                generatedEntries.Add(new GeneratedEntry(index, null, tag, null, ItemKind.Remove, removePath));
+                hasErrors |= !TryAddGeneratedRemoveEntry(item, generatedEntries);
             }
 
             if (hasErrors)
@@ -173,6 +113,76 @@ public sealed class GeneratePayloadPackageAssetsTask : Microsoft.Build.Utilities
         return string.IsNullOrWhiteSpace(fullPath) ? Path.GetFullPath(item.ItemSpec) : Path.GetFullPath(fullPath);
     }
 
+    private bool TryAddGeneratedContentEntry(
+        int index,
+        ITaskItem item,
+        ICollection<GeneratedEntry> generatedEntries,
+        List<ITaskItem> packFiles)
+    {
+        if (!TryGetRequiredMetadata(item, "PayloadContent", "TargetPath", out var tag, out var targetPath))
+        {
+            return false;
+        }
+
+        var copyOnBuild = item.GetMetadata("CopyOnBuild");
+        var sourcePath = GetSourcePath(item);
+
+        if (File.Exists(sourcePath))
+        {
+            var relativePath = NormalizePath(Path.Combine(index.ToString("D4", CultureInfo.InvariantCulture), Path.GetFileName(sourcePath)));
+            packFiles.Add(CreatePackFile(sourcePath, relativePath));
+            generatedEntries.Add(GeneratedEntry.CreateContent(relativePath, tag, targetPath, copyOnBuild));
+            return true;
+        }
+
+        if (Directory.Exists(sourcePath))
+        {
+            var relativeRoot = index.ToString("D4", CultureInfo.InvariantCulture);
+            foreach (var filePath in Directory.EnumerateFiles(sourcePath, "*", SearchOption.AllDirectories))
+            {
+                var childRelativePath = NormalizePath(Path.Combine(relativeRoot, Polyfill.GetRelativePath(sourcePath, filePath)));
+                packFiles.Add(CreatePackFile(filePath, childRelativePath));
+            }
+
+            generatedEntries.Add(GeneratedEntry.CreateContent(NormalizePath(relativeRoot), tag, targetPath, copyOnBuild));
+            return true;
+        }
+
+        Log.LogError($"Payload: authored PayloadContent source '{item.ItemSpec}' does not exist.");
+        return false;
+    }
+
+    private bool TryAddGeneratedRemoveEntry(ITaskItem item, ICollection<GeneratedEntry> generatedEntries)
+    {
+        if (!TryGetRequiredMetadata(item, "PayloadRemove", "Include", out var tag, out var removePath))
+        {
+            return false;
+        }
+
+        generatedEntries.Add(GeneratedEntry.CreateRemove(removePath, tag, item.GetMetadata("CopyOnBuild")));
+        return true;
+    }
+
+    private bool TryGetRequiredMetadata(ITaskItem item, string itemName, string valueName, out string tag, out string value)
+    {
+        tag = item.GetMetadata("Tag");
+        value = valueName == "Include" ? item.ItemSpec : item.GetMetadata(valueName);
+
+        if (string.IsNullOrWhiteSpace(tag))
+        {
+            Log.LogError($"Payload: authored {itemName} item '{item.ItemSpec}' is missing Tag metadata.");
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            Log.LogError($"Payload: authored {itemName} item '{item.ItemSpec}' is missing {valueName}.");
+            return false;
+        }
+
+        return true;
+    }
+
     private static TaskItem CreatePackFile(string sourcePath, string relativePath)
     {
         var packFile = new TaskItem(sourcePath);
@@ -195,25 +205,16 @@ public sealed class GeneratePayloadPackageAssetsTask : Microsoft.Build.Utilities
 
         foreach (var entry in entries)
         {
-            if (entry.Kind == ItemKind.Content)
-            {
-                builder.AppendLine($"    <PayloadContent Include=\"$({rootProperty}){Escape(entry.PackageRelativePath!)}\">");
-                builder.AppendLine($"      <PackageId>{Escape(packageId)}</PackageId>");
-                builder.AppendLine($"      <Tag>{Escape(entry.Tag)}</Tag>");
-                builder.AppendLine($"      <TargetPath>{Escape(entry.PathValue)}</TargetPath>");
-                if (!string.IsNullOrWhiteSpace(entry.CopyOnBuild))
-                {
-                    builder.AppendLine($"      <CopyOnBuild>{Escape(entry.CopyOnBuild!)}</CopyOnBuild>");
-                }
-
-                builder.AppendLine("    </PayloadContent>");
-                continue;
-            }
-
-            builder.AppendLine($"    <PayloadRemove Include=\"{Escape(entry.PathValue)}\">");
+            builder.AppendLine($"    <{entry.ItemName} Include=\"{Escape(entry.ResolveInclude(rootProperty))}\">");
             builder.AppendLine($"      <PackageId>{Escape(packageId)}</PackageId>");
             builder.AppendLine($"      <Tag>{Escape(entry.Tag)}</Tag>");
-            builder.AppendLine("    </PayloadRemove>");
+
+            foreach (var metadata in entry.Metadata)
+            {
+                builder.AppendLine($"      <{metadata.Name}>{Escape(metadata.Value)}</{metadata.Name}>");
+            }
+
+            builder.AppendLine($"    </{entry.ItemName}>");
         }
 
         builder.AppendLine("  </ItemGroup>");
@@ -255,11 +256,40 @@ public sealed class GeneratePayloadPackageAssetsTask : Microsoft.Build.Utilities
     private static string Escape(string value)
         => SecurityElement.Escape(value) ?? string.Empty;
 
-    private sealed record GeneratedEntry(int Order, string? PackageRelativePath, string Tag, string? CopyOnBuild, ItemKind Kind, string PathValue);
-
-    private enum ItemKind
+    private sealed record GeneratedEntry(string ItemName, string Tag, string? PackageRelativePath, IReadOnlyList<EntryMetadata> Metadata)
     {
-        Content,
-        Remove
+        public static GeneratedEntry CreateContent(string packageRelativePath, string tag, string targetPath, string? copyOnBuild)
+        {
+            var metadata = new List<EntryMetadata>
+            {
+                new("TargetPath", targetPath)
+            };
+
+            if (!string.IsNullOrWhiteSpace(copyOnBuild))
+            {
+                metadata.Add(new EntryMetadata("CopyOnBuild", copyOnBuild!));
+            }
+
+            return new GeneratedEntry("PayloadContent", tag, packageRelativePath, metadata);
+        }
+
+        public static GeneratedEntry CreateRemove(string removePath, string tag, string? copyOnBuild)
+        {
+            var metadata = new List<EntryMetadata>();
+
+            if (!string.IsNullOrWhiteSpace(copyOnBuild))
+            {
+                metadata.Add(new EntryMetadata("CopyOnBuild", copyOnBuild!));
+            }
+
+            return new GeneratedEntry("PayloadRemove", tag, removePath, metadata);
+        }
+
+        public string ResolveInclude(string rootProperty)
+            => ItemName == "PayloadContent"
+                ? $"$({rootProperty}){PackageRelativePath}"
+                : PackageRelativePath ?? string.Empty;
     }
+
+    private sealed record EntryMetadata(string Name, string Value);
 }

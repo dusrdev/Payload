@@ -72,6 +72,7 @@ Parent packages may also declare `PayloadRemove` for explicit cleanup of files t
 <ItemGroup>
   <PayloadRemove Include=".agents/skills/example-skill/obsolete.md">
     <Tag>ExampleSkill</Tag>
+    <CopyOnBuild>false</CopyOnBuild>
   </PayloadRemove>
 </ItemGroup>
 ```
@@ -82,8 +83,12 @@ Meaning:
   The relative destination file path to remove
 - `Tag`
   The same logical group used by `PayloadContent` and `PayloadPolicy`
+- `CopyOnBuild`
+  Optional parent default for cleanup-only tags, resolved with the same precedence rules as `PayloadContent`
 
 `PayloadRemove` is file-only. If it resolves to a directory, Payload warns and skips so it does not recursively delete consumer content.
+
+Parent-side `CopyOnBuild` should be consistent within a tag. If `PayloadContent` and `PayloadRemove` items under the same `PackageId + Tag` disagree, Payload warns and falls back to `true`.
 
 ## Consumer Control with `PayloadPolicy`
 
@@ -116,7 +121,7 @@ This is intentionally conservative:
 `CopyOnBuild` resolution works like this:
 
 1. consumer `PayloadPolicy` value, if specified
-2. otherwise parent `PayloadContent` value, if specified
+2. otherwise parent `PayloadContent` or `PayloadRemove` value, if specified
 3. otherwise `true`
 
 That means a parent package can ship optional payloads by declaring:

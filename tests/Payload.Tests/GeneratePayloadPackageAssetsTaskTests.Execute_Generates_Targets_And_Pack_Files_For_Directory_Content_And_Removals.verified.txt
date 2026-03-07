@@ -18,6 +18,7 @@
     <PayloadRemove Include=".agents/skills/example-skill/obsolete.md">
       <PackageId>ParentPackage</PackageId>
       <Tag>ExampleSkill</Tag>
+      <CopyOnBuild>false</CopyOnBuild>
     </PayloadRemove>
   </ItemGroup>
 </Project>

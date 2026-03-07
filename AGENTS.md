@@ -40,6 +40,7 @@ Parent cleanup item shape:
 - item name: `PayloadRemove`
 - metadata:
   - `Tag`
+  - `CopyOnBuild`
 
 For authoring in the parent package project, `PayloadRemove Include` is the relative destination file path to remove from the consumer.
 
@@ -152,10 +153,12 @@ No automatic removal on disable.
 `CopyOnBuild` resolution order:
 
 1. consumer `PayloadPolicy`, if specified
-2. otherwise parent `PayloadContent`, if specified
+2. otherwise parent `PayloadContent` or `PayloadRemove`, if specified
 3. otherwise `true`
 
 Use `PayloadRemove` for explicit package-authored cleanup when a file should be removed on consumer builds.
+
+Parent-side `CopyOnBuild` values should be consistent within a tag. If parent `PayloadContent` and `PayloadRemove` items for the same `PackageId + Tag` disagree, warn and fall back to `true`.
 
 ### Scope discipline
 

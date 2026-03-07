@@ -57,6 +57,7 @@
     </ItemGroup>
 
     <CopyRepoContentTask
+      Condition="'@(_PayloadResolvedContent)' != '' or '@(_PayloadResolvedRemovals)' != ''"
       ProjectDirectory="$(MSBuildProjectDirectory)"
       RootDirectory="$(PayloadRootDirectory)"
       PayloadContentItems="@(_PayloadResolvedContent)"
