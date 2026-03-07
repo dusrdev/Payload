@@ -31,3 +31,12 @@ jobs:
 
       - name: Run TUnit suite
         run: dotnet run --project tests/Payload.Tests/Payload.Tests.csproj -c Release --no-restore -- --disable-logo
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: payload-test-report
+          path: TestResults/*.html
+          if-no-files-found: warn
+          retention-days: 400
