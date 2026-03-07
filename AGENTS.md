@@ -35,9 +35,17 @@ Parent package authoring item shape:
   - `TargetPath`
   - `CopyOnBuild`
 
+Parent cleanup item shape:
+
+- item name: `PayloadRemove`
+- metadata:
+  - `Tag`
+
+For authoring in the parent package project, `PayloadRemove Include` is the relative destination file path to remove from the consumer.
+
 For authoring in the parent package project, the item `Include` is the local source file or directory.
 
-At pack time, `Payload` should generate the parent package's transitive `.targets` file and pack the authored files into the `.nupkg`.
+At pack time, `Payload` should generate the parent package's transitive `.targets` file, pack the authored files into the `.nupkg`, and emit any authored `PayloadRemove` items into the generated `.targets`.
 
 Consumer policy item shape:
 
@@ -68,6 +76,8 @@ When effective `CopyOnBuild` is `true`:
 
 - if source is a file, copy the file
 - if source is a directory, copy recursively preserving relative structure under `TargetPath`
+- if a parent package declares `PayloadRemove`, remove the matching destination file
+- if a `PayloadRemove` path resolves to a directory, warn and skip
 - copied files are package-provided artifacts
 - local edits are not considered a supported customization model
 - while copying remains enabled, local edits may be overwritten
@@ -75,6 +85,7 @@ When effective `CopyOnBuild` is `true`:
 When effective `CopyOnBuild` is `false`:
 
 - stop copying for that `PackageId + Tag`
+- do not execute `PayloadRemove` for that `PackageId + Tag`
 - do not remove existing copied files
 - do not restore missing files
 - do not overwrite existing files
@@ -144,6 +155,8 @@ No automatic removal on disable.
 2. otherwise parent `PayloadContent`, if specified
 3. otherwise `true`
 
+Use `PayloadRemove` for explicit package-authored cleanup when a file should be removed on consumer builds.
+
 ### Scope discipline
 
 Do not bloat this into a general deployment engine.
@@ -180,6 +193,7 @@ The shared build package should contain:
 - a `.targets` file under `buildTransitive`
 - helper logic for root detection
 - helper logic for file enumeration and copy decisions
+- explicit file removal support through `PayloadRemove`
 
 ### Parent package responsibilities
 
@@ -187,6 +201,7 @@ A parent package that references the shared build package should:
 
 - include its bundled content in the `.nupkg`
 - author `PayloadContent` items in its project
+- author `PayloadRemove` items when a previously shipped file must be removed explicitly
 - use `PayloadContent CopyOnBuild="false"` for optional-by-default payload groups when needed
 - let `Payload` generate the `.targets` file during pack
 - choose stable, package-specific tags such as:

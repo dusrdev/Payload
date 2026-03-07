@@ -25,79 +25,77 @@ public sealed class CopyRepoContentTask : Microsoft.Build.Utilities.Task
     /// Gets or sets the resolved packaged content items to copy.
     /// </summary>
     [Required]
-    public ITaskItem[] PayloadContentItems { get; set; } = Array.Empty<ITaskItem>();
+    public ITaskItem[] PayloadContentItems { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the resolved packaged remove items to delete.
+    /// </summary>
+    public ITaskItem[] PayloadRemoveItems { get; set; } = [];
 
     /// <summary>
     /// Gets or sets consumer-defined policies scoped by package id and tag.
     /// </summary>
-    public ITaskItem[] PayloadPolicies { get; set; } = Array.Empty<ITaskItem>();
+    public ITaskItem[] PayloadPolicies { get; set; } = [];
 
     /// <summary>
-    /// Executes the copy operation for each enabled payload item.
+    /// Executes the copy and remove operations for each enabled payload tag.
     /// </summary>
     public override bool Execute()
     {
         try
         {
             var policies = PolicyMap.Create(PayloadPolicies);
+            var parentCopyOnBuild = BuildParentCopyOnBuildMap(PayloadContentItems);
             string? repoRoot = null;
             var repoRootAttempted = false;
 
             foreach (var item in PayloadContentItems)
             {
-                var packageId = item.GetMetadata("PackageId");
-                var tag = item.GetMetadata("Tag");
-                var targetPath = item.GetMetadata("TargetPath");
-
-                if (string.IsNullOrWhiteSpace(packageId))
-                {
-                    Log.LogWarning($"RepoContentCopy: PayloadContent item '{item.ItemSpec}' is missing PackageId metadata. Skipping.");
-                    continue;
-                }
-
-                if (string.IsNullOrWhiteSpace(tag))
-                {
-                    Log.LogWarning($"RepoContentCopy: PayloadContent item '{item.ItemSpec}' is missing Tag metadata. Skipping.");
-                    continue;
-                }
-
-                if (string.IsNullOrWhiteSpace(targetPath))
-                {
-                    Log.LogWarning($"RepoContentCopy: PayloadContent item '{item.ItemSpec}' is missing TargetPath metadata. Skipping.");
-                    continue;
-                }
-
-                if (!TryResolveCopyOnBuild(item, packageId, tag, policies, out var shouldCopyOnBuild))
+                if (!TryResolveContentItem(item, policies, ref repoRoot, ref repoRootAttempted, out var sourcePath, out var destinationPath))
                 {
                     continue;
                 }
-
-                if (!shouldCopyOnBuild)
-                {
-                    Log.LogMessage(MessageImportance.Low, $"RepoContentCopy: '{packageId}' tag '{tag}' has CopyOnBuild='false'. Skipping.");
-                    continue;
-                }
-
-                if (!TryResolveDestinationRoot(packageId, tag, targetPath, policies, ref repoRoot, ref repoRootAttempted, out var destinationRoot))
-                {
-                    continue;
-                }
-
-                var sourcePath = item.ItemSpec;
 
                 if (File.Exists(sourcePath))
                 {
-                    CopySingleFile(sourcePath, destinationRoot);
+                    CopySingleFile(sourcePath, destinationPath);
                     continue;
                 }
 
                 if (Directory.Exists(sourcePath))
                 {
-                    CopyDirectory(sourcePath, destinationRoot);
+                    foreach (var _ in CopyDirectory(sourcePath, destinationPath))
+                    {
+                    }
+
                     continue;
                 }
 
                 Log.LogWarning($"RepoContentCopy: source '{sourcePath}' does not exist. Skipping.");
+            }
+
+            foreach (var item in PayloadRemoveItems)
+            {
+                if (!TryResolveRemoveItem(item, policies, parentCopyOnBuild, ref repoRoot, ref repoRootAttempted, out var packageId, out var tag, out var destinationBasePath, out var destinationPath))
+                {
+                    continue;
+                }
+
+                if (Directory.Exists(destinationPath))
+                {
+                    Log.LogWarning($"RepoContentCopy: directory '{destinationPath}' is no longer compatible with package '{packageId}' tag '{tag}'. Remove it manually. PayloadRemove only supports files.");
+                    continue;
+                }
+
+                if (!File.Exists(destinationPath))
+                {
+                    Log.LogMessage(MessageImportance.Low, $"RepoContentCopy: removal target '{destinationPath}' does not exist.");
+                    continue;
+                }
+
+                File.Delete(destinationPath);
+                Log.LogMessage(MessageImportance.Normal, $"RepoContentCopy: removed '{destinationPath}'.");
+                DeleteEmptyParentDirectories(destinationPath, destinationBasePath);
             }
 
             return !Log.HasLoggedErrors;
@@ -109,16 +107,177 @@ public sealed class CopyRepoContentTask : Microsoft.Build.Utilities.Task
         }
     }
 
-    private bool TryResolveDestinationRoot(
+    private static Dictionary<(string PackageId, string Tag), string?> BuildParentCopyOnBuildMap(IEnumerable<ITaskItem> items)
+    {
+        var map = new Dictionary<(string PackageId, string Tag), string?>(ParentTagComparer.OrdinalIgnoreCase);
+
+        foreach (var item in items)
+        {
+            var packageId = item.GetMetadata("PackageId");
+            var tag = item.GetMetadata("Tag");
+
+            if (string.IsNullOrWhiteSpace(packageId) || string.IsNullOrWhiteSpace(tag))
+            {
+                continue;
+            }
+
+            var copyOnBuild = item.GetMetadata("CopyOnBuild");
+            if (!string.IsNullOrWhiteSpace(copyOnBuild))
+            {
+                map[(packageId, tag)] = copyOnBuild;
+            }
+        }
+
+        return map;
+    }
+
+    private bool TryResolveContentItem(
+        ITaskItem item,
+        PolicyMap policies,
+        ref string? repoRoot,
+        ref bool repoRootAttempted,
+        out string sourcePath,
+        out string destinationPath)
+    {
+        sourcePath = item.ItemSpec;
+        destinationPath = string.Empty;
+
+        if (!TryGetRequiredMetadata(item, "TargetPath", out var packageId, out var tag, out var targetPath))
+        {
+            return false;
+        }
+
+        if (!TryResolveCopyOnBuild(packageId, tag, item.GetMetadata("CopyOnBuild"), policies, out var shouldCopyOnBuild))
+        {
+            return false;
+        }
+
+        if (!shouldCopyOnBuild)
+        {
+            Log.LogMessage(MessageImportance.Low, $"RepoContentCopy: '{packageId}' tag '{tag}' has CopyOnBuild='false'. Skipping.");
+            return false;
+        }
+
+        if (!TryResolveDestinationPath(packageId, tag, targetPath, policies, ref repoRoot, ref repoRootAttempted, out destinationPath))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool TryResolveRemoveItem(
+        ITaskItem item,
+        PolicyMap policies,
+        Dictionary<(string PackageId, string Tag), string?> parentCopyOnBuild,
+        ref string? repoRoot,
+        ref bool repoRootAttempted,
+        out string packageId,
+        out string tag,
+        out string destinationBasePath,
+        out string destinationPath)
+    {
+        destinationBasePath = string.Empty;
+        destinationPath = string.Empty;
+        packageId = string.Empty;
+        tag = string.Empty;
+
+        var removePath = item.ItemSpec;
+        if (string.IsNullOrWhiteSpace(removePath))
+        {
+            Log.LogWarning("RepoContentCopy: PayloadRemove item is missing Include. Skipping.");
+            return false;
+        }
+
+        if (!TryGetRequiredMetadata(item, "Include", out packageId, out tag, out _))
+        {
+            return false;
+        }
+
+        parentCopyOnBuild.TryGetValue((packageId, tag), out var parentCopyOnBuildRaw);
+        if (!TryResolveCopyOnBuild(packageId, tag, parentCopyOnBuildRaw, policies, out var shouldCopyOnBuild))
+        {
+            return false;
+        }
+
+        if (!shouldCopyOnBuild)
+        {
+            Log.LogMessage(MessageImportance.Low, $"RepoContentCopy: '{packageId}' tag '{tag}' has CopyOnBuild='false'. Skipping removals.");
+            return false;
+        }
+
+        if (Path.IsPathRooted(removePath))
+        {
+            Log.LogWarning($"RepoContentCopy: '{packageId}' tag '{tag}' has absolute PayloadRemove path '{removePath}'. PayloadRemove paths must always be relative. Skipping.");
+            return false;
+        }
+
+        if (!TryResolveDestinationBasePath(packageId, tag, removePath, policies, ref repoRoot, ref repoRootAttempted, out destinationBasePath))
+        {
+            return false;
+        }
+
+        destinationPath = Path.Combine(destinationBasePath, removePath);
+        return true;
+    }
+
+    private bool TryGetRequiredMetadata(ITaskItem item, string valueName, out string packageId, out string tag, out string value)
+    {
+        packageId = item.GetMetadata("PackageId");
+        tag = item.GetMetadata("Tag");
+        value = valueName == "Include" ? item.ItemSpec : item.GetMetadata(valueName);
+
+        if (string.IsNullOrWhiteSpace(packageId))
+        {
+            Log.LogWarning($"RepoContentCopy: item '{item.ItemSpec}' is missing PackageId metadata. Skipping.");
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(tag))
+        {
+            Log.LogWarning($"RepoContentCopy: item '{item.ItemSpec}' is missing Tag metadata. Skipping.");
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            Log.LogWarning($"RepoContentCopy: '{packageId}' tag '{tag}' is missing {valueName}. Skipping.");
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool TryResolveDestinationPath(
         string packageId,
         string tag,
         string targetPath,
         PolicyMap policies,
         ref string? repoRoot,
         ref bool repoRootAttempted,
-        out string destinationRoot)
+        out string destinationPath)
     {
-        destinationRoot = string.Empty;
+        destinationPath = string.Empty;
+
+        if (!TryResolveDestinationBasePath(packageId, tag, targetPath, policies, ref repoRoot, ref repoRootAttempted, out var destinationBasePath))
+        {
+            return false;
+        }
+
+        destinationPath = Path.Combine(destinationBasePath, targetPath);
+        return true;
+    }
+
+    private bool TryResolveDestinationBasePath(
+        string packageId,
+        string tag,
+        string targetPath,
+        PolicyMap policies,
+        ref string? repoRoot,
+        ref bool repoRootAttempted,
+        out string destinationBasePath)
+    {
+        destinationBasePath = string.Empty;
 
         if (Path.IsPathRooted(targetPath))
         {
@@ -128,11 +287,9 @@ public sealed class CopyRepoContentTask : Microsoft.Build.Utilities.Task
 
         if (policies.TryGetOverridePath(packageId, tag, out var overridePath) && !string.IsNullOrWhiteSpace(overridePath))
         {
-            destinationRoot = Path.IsPathRooted(overridePath)
+            destinationBasePath = Path.IsPathRooted(overridePath)
                 ? Path.GetFullPath(overridePath)
                 : Path.GetFullPath(Path.Combine(ProjectDirectory, overridePath));
-
-            destinationRoot = Path.Combine(destinationRoot, targetPath);
             return true;
         }
 
@@ -152,15 +309,13 @@ public sealed class CopyRepoContentTask : Microsoft.Build.Utilities.Task
             return false;
         }
 
-        destinationRoot = Path.GetFullPath(Path.Combine(repoRoot, targetPath));
+        destinationBasePath = repoRoot;
         return true;
     }
 
-    private bool TryResolveCopyOnBuild(ITaskItem item, string packageId, string tag, PolicyMap policies, out bool shouldCopyOnBuild)
+    private bool TryResolveCopyOnBuild(string packageId, string tag, string? parentCopyOnBuildRaw, PolicyMap policies, out bool shouldCopyOnBuild)
     {
         shouldCopyOnBuild = true;
-
-        var parentCopyOnBuildRaw = item.GetMetadata("CopyOnBuild");
         var hasConsumerPolicy = policies.TryGetCopyOnBuild(packageId, tag, out var consumerCopyOnBuild, out var rawConsumerCopyOnBuild);
 
         if (hasConsumerPolicy && consumerCopyOnBuild.HasValue)
@@ -194,25 +349,24 @@ public sealed class CopyRepoContentTask : Microsoft.Build.Utilities.Task
         return !string.IsNullOrWhiteSpace(value) && bool.TryParse(value, out copyOnBuild);
     }
 
-    private void CopySingleFile(string sourceFilePath, string destinationPath)
+    private string CopySingleFile(string sourceFilePath, string destinationPath)
     {
-        var destinationFilePath = Directory.Exists(destinationPath)
-            ? Path.Combine(destinationPath, Path.GetFileName(sourceFilePath))
-            : destinationPath;
+        var destinationFilePath = ResolveSingleFileDestinationPath(sourceFilePath, destinationPath);
 
         EnsureParentDirectory(destinationFilePath);
 
         if (!ShouldCopy(sourceFilePath, destinationFilePath))
         {
             Log.LogMessage(MessageImportance.Low, $"RepoContentCopy: '{destinationFilePath}' is up to date.");
-            return;
+            return destinationFilePath;
         }
 
         File.Copy(sourceFilePath, destinationFilePath, overwrite: true);
         Log.LogMessage(MessageImportance.Normal, $"RepoContentCopy: copied '{sourceFilePath}' -> '{destinationFilePath}'.");
+        return destinationFilePath;
     }
 
-    private void CopyDirectory(string sourceDirectoryPath, string destinationDirectoryPath)
+    private IEnumerable<string> CopyDirectory(string sourceDirectoryPath, string destinationDirectoryPath)
     {
         foreach (var sourceFilePath in Directory.EnumerateFiles(sourceDirectoryPath, "*", SearchOption.AllDirectories))
         {
@@ -224,13 +378,45 @@ public sealed class CopyRepoContentTask : Microsoft.Build.Utilities.Task
             if (!ShouldCopy(sourceFilePath, destinationFilePath))
             {
                 Log.LogMessage(MessageImportance.Low, $"RepoContentCopy: '{destinationFilePath}' is up to date.");
+                yield return destinationFilePath;
                 continue;
             }
 
             File.Copy(sourceFilePath, destinationFilePath, overwrite: true);
             Log.LogMessage(MessageImportance.Normal, $"RepoContentCopy: copied '{sourceFilePath}' -> '{destinationFilePath}'.");
+            yield return destinationFilePath;
         }
     }
+
+    private static void DeleteEmptyParentDirectories(string filePath, string stopDirectory)
+    {
+        var stopInfo = new DirectoryInfo(Path.GetFullPath(stopDirectory));
+
+        for (var directory = new DirectoryInfo(Path.GetDirectoryName(filePath) ?? string.Empty); directory is not null; directory = directory.Parent)
+        {
+            if (string.Equals(directory.FullName, stopInfo.FullName, StringComparison.Ordinal))
+            {
+                break;
+            }
+
+            if (!directory.Exists)
+            {
+                continue;
+            }
+
+            if (Directory.EnumerateFileSystemEntries(directory.FullName).Any())
+            {
+                break;
+            }
+
+            directory.Delete();
+        }
+    }
+
+    private static string ResolveSingleFileDestinationPath(string sourceFilePath, string destinationPath)
+        => Directory.Exists(destinationPath)
+            ? Path.Combine(destinationPath, Path.GetFileName(sourceFilePath))
+            : destinationPath;
 
     private static void EnsureParentDirectory(string filePath)
     {
@@ -271,5 +457,18 @@ public sealed class CopyRepoContentTask : Microsoft.Build.Utilities.Task
         using var stream = File.OpenRead(path);
         using var sha = SHA256.Create();
         return sha.ComputeHash(stream);
+    }
+
+    private sealed class ParentTagComparer : IEqualityComparer<(string PackageId, string Tag)>
+    {
+        public static readonly ParentTagComparer OrdinalIgnoreCase = new();
+
+        public bool Equals((string PackageId, string Tag) x, (string PackageId, string Tag) y)
+            => string.Equals(x.PackageId, y.PackageId, StringComparison.OrdinalIgnoreCase)
+               && string.Equals(x.Tag, y.Tag, StringComparison.OrdinalIgnoreCase);
+
+        public int GetHashCode((string PackageId, string Tag) obj)
+            => (StringComparer.OrdinalIgnoreCase.GetHashCode(obj.PackageId) * 397)
+               ^ StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Tag);
     }
 }

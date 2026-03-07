@@ -221,6 +221,149 @@ public class CopyRepoContentTaskTests
     }
 
     [Test]
+    public async Task Execute_Removes_File_When_PayloadRemove_Is_Enabled()
+    {
+        using var temp = new TemporaryDirectory();
+        var repoRoot = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repoRoot);
+        var projectDirectory = Path.Combine(repoRoot, "src", "Consumer");
+        Directory.CreateDirectory(projectDirectory);
+        var obsoleteFile = Path.Combine(repoRoot, ".agents", "skills", "example-skill", "obsolete.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(obsoleteFile)!);
+        await File.WriteAllTextAsync(obsoleteFile, "remove me");
+
+        var task = CreateTask(
+            projectDirectory,
+            repoRoot,
+            [],
+            payloadRemoveItems:
+            [
+                TestTaskItem.Create(".agents/skills/example-skill/obsolete.md", ("PackageId", "ParentPackage"), ("Tag", "ExampleSkill"))
+            ]);
+
+        await Assert.That(task.Execute()).IsTrue();
+        await Assert.That(File.Exists(obsoleteFile)).IsFalse();
+    }
+
+    [Test]
+    public async Task Execute_Does_Not_Remove_File_When_Consumer_CopyOnBuild_Is_False()
+    {
+        using var temp = new TemporaryDirectory();
+        var repoRoot = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repoRoot);
+        var projectDirectory = Path.Combine(repoRoot, "src", "Consumer");
+        Directory.CreateDirectory(projectDirectory);
+        var obsoleteFile = Path.Combine(repoRoot, ".agents", "skills", "example-skill", "obsolete.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(obsoleteFile)!);
+        await File.WriteAllTextAsync(obsoleteFile, "keep me");
+
+        var task = CreateTask(
+            projectDirectory,
+            repoRoot,
+            [],
+            [
+                TestTaskItem.Create("ParentPackage", ("Tag", "ExampleSkill"), ("CopyOnBuild", "false"))
+            ],
+            [
+                TestTaskItem.Create(".agents/skills/example-skill/obsolete.md", ("PackageId", "ParentPackage"), ("Tag", "ExampleSkill"))
+            ]);
+
+        await Assert.That(task.Execute()).IsTrue();
+        await Assert.That(File.Exists(obsoleteFile)).IsTrue();
+    }
+
+    [Test]
+    public async Task Execute_Does_Not_Remove_File_When_Parent_CopyOnBuild_Is_False_And_Consumer_Does_Not_Override()
+    {
+        using var temp = new TemporaryDirectory();
+        var repoRoot = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repoRoot);
+        var projectDirectory = Path.Combine(repoRoot, "src", "Consumer");
+        Directory.CreateDirectory(projectDirectory);
+        var obsoleteFile = Path.Combine(repoRoot, ".agents", "skills", "example-skill", "obsolete.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(obsoleteFile)!);
+        await File.WriteAllTextAsync(obsoleteFile, "keep me");
+
+        var task = CreateTask(
+            projectDirectory,
+            repoRoot,
+            [
+                TestTaskItem.Create(Path.Combine(temp.Path, "package", "README.md"), ("PackageId", "ParentPackage"), ("Tag", "ExampleSkill"), ("TargetPath", "docs/README.md"), ("CopyOnBuild", "false"))
+            ],
+            payloadRemoveItems:
+            [
+                TestTaskItem.Create(".agents/skills/example-skill/obsolete.md", ("PackageId", "ParentPackage"), ("Tag", "ExampleSkill"))
+            ]);
+
+        await Assert.That(task.Execute()).IsTrue();
+        await Assert.That(File.Exists(obsoleteFile)).IsTrue();
+    }
+
+    [Test]
+    public async Task Execute_Removes_File_When_Parent_CopyOnBuild_Is_False_And_Consumer_Overrides_To_True()
+    {
+        using var temp = new TemporaryDirectory();
+        var sourceFile = Path.Combine(temp.Path, "package", "README.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(sourceFile)!);
+        await File.WriteAllTextAsync(sourceFile, "payload");
+
+        var repoRoot = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repoRoot);
+        var projectDirectory = Path.Combine(repoRoot, "src", "Consumer");
+        Directory.CreateDirectory(projectDirectory);
+        var obsoleteFile = Path.Combine(repoRoot, ".agents", "skills", "example-skill", "obsolete.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(obsoleteFile)!);
+        await File.WriteAllTextAsync(obsoleteFile, "remove me");
+
+        var task = CreateTask(
+            projectDirectory,
+            repoRoot,
+            [
+                TestTaskItem.Create(sourceFile, ("PackageId", "ParentPackage"), ("Tag", "ExampleSkill"), ("TargetPath", "docs/README.md"), ("CopyOnBuild", "false"))
+            ],
+            [
+                TestTaskItem.Create("ParentPackage", ("Tag", "ExampleSkill"), ("CopyOnBuild", "true"))
+            ],
+            [
+                TestTaskItem.Create(".agents/skills/example-skill/obsolete.md", ("PackageId", "ParentPackage"), ("Tag", "ExampleSkill"))
+            ]);
+
+        await Assert.That(task.Execute()).IsTrue();
+        await Assert.That(File.Exists(obsoleteFile)).IsFalse();
+    }
+
+    [Test]
+    public async Task Execute_Warns_And_Skips_Directory_Remove_Target()
+    {
+        using var temp = new TemporaryDirectory();
+        var repoRoot = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repoRoot);
+        var projectDirectory = Path.Combine(repoRoot, "src", "Consumer");
+        Directory.CreateDirectory(projectDirectory);
+        var obsoleteDirectory = Path.Combine(repoRoot, ".agents", "skills", "example-skill");
+        Directory.CreateDirectory(obsoleteDirectory);
+        await File.WriteAllTextAsync(Path.Combine(obsoleteDirectory, "SKILL.md"), "keep");
+
+        var engine = new RecordingBuildEngine();
+        var task = new CopyRepoContentTask
+        {
+            BuildEngine = engine,
+            ProjectDirectory = projectDirectory,
+            RootDirectory = repoRoot,
+            PayloadContentItems = [],
+            PayloadPolicies = [],
+            PayloadRemoveItems =
+            [
+                TestTaskItem.Create(".agents/skills/example-skill", ("PackageId", "ParentPackage"), ("Tag", "ExampleSkill"))
+            ]
+        };
+
+        await Assert.That(task.Execute()).IsTrue();
+        await Assert.That(Directory.Exists(obsoleteDirectory)).IsTrue();
+        await Assert.That(engine.Warnings.Any(x => (x.Message ?? string.Empty).Contains("Remove it manually", StringComparison.OrdinalIgnoreCase))).IsTrue();
+    }
+
+    [Test]
     public async Task Execute_Does_Not_Overwrite_When_Destination_Has_Identical_Content()
     {
         using var temp = new TemporaryDirectory();
@@ -366,13 +509,15 @@ public class CopyRepoContentTaskTests
         string projectDirectory,
         string rootDirectory,
         Microsoft.Build.Framework.ITaskItem[] payloadContentItems,
-        Microsoft.Build.Framework.ITaskItem[]? payloadPolicies = null)
+        Microsoft.Build.Framework.ITaskItem[]? payloadPolicies = null,
+        Microsoft.Build.Framework.ITaskItem[]? payloadRemoveItems = null)
         => new()
         {
             BuildEngine = new RecordingBuildEngine(),
             ProjectDirectory = projectDirectory,
             RootDirectory = rootDirectory,
             PayloadContentItems = payloadContentItems,
-            PayloadPolicies = payloadPolicies ?? []
+            PayloadPolicies = payloadPolicies ?? [],
+            PayloadRemoveItems = payloadRemoveItems ?? []
         };
 }

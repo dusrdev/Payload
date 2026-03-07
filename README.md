@@ -17,6 +17,7 @@ Payload is intentionally narrow. It lets a parent package declare bundled conten
 ## Features
 
 - Parent packages declare bundled content with `PayloadContent`
+- Parent packages can declare explicit file removals with `PayloadRemove`
 - Consumers control copy behavior per `PackageId + Tag` with `PayloadPolicy`
 - Content can be a single file or a whole directory
 - Directories are copied recursively while preserving relative structure
@@ -65,6 +66,25 @@ Parent packages may also declare `CopyOnBuild` on `PayloadContent`.
 - `CopyOnBuild="false"` marks the payload as optional by default
 - a consumer may override that default with `PayloadPolicy`
 
+Parent packages may also declare `PayloadRemove` for explicit cleanup of files that should be removed from the consumer:
+
+```xml
+<ItemGroup>
+  <PayloadRemove Include=".agents/skills/example-skill/obsolete.md">
+    <Tag>ExampleSkill</Tag>
+  </PayloadRemove>
+</ItemGroup>
+```
+
+Meaning:
+
+- `Include`
+  The relative destination file path to remove
+- `Tag`
+  The same logical group used by `PayloadContent` and `PayloadPolicy`
+
+`PayloadRemove` is file-only. If it resolves to a directory, Payload warns and skips so it does not recursively delete consumer content.
+
 ## Consumer Control with `PayloadPolicy`
 
 Consumers can opt out of specific tags:
@@ -88,6 +108,7 @@ Meaning:
 
 This is intentionally conservative:
 
+- `PayloadRemove` entries for that tag do not run
 - existing copied files are not deleted
 - missing files are not restored
 - future overwrites stop
@@ -213,6 +234,8 @@ When copying is enabled:
 
 - file sources copy as files
 - directory sources copy recursively
+- explicit `PayloadRemove` entries delete matching files
+- if a `PayloadRemove` path resolves to a directory, Payload warns and skips it
 - local modifications are not treated as a supported customization model
 - package-provided content may overwrite local files while synchronization remains enabled
 
@@ -225,6 +248,13 @@ Copy decisions follow this order:
 5. hash equal -> skip
 
 This avoids relying on modified timestamps and works for text files, binaries, docs, and assets.
+
+When copying is disabled with `CopyOnBuild="false"`, Payload remains conservative:
+
+- `PayloadRemove` entries for that tag are skipped
+- existing copied files are left in place
+- missing files are not restored
+- no explicit removals are executed
 
 ## Generated Package Layout
 

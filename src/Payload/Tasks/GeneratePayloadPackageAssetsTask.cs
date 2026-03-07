@@ -19,6 +19,11 @@ public sealed class GeneratePayloadPackageAssetsTask : Microsoft.Build.Utilities
     public ITaskItem[] PayloadContentItems { get; set; } = [];
 
     /// <summary>
+    /// Gets or sets the authored <c>PayloadRemove</c> items declared by the parent package.
+    /// </summary>
+    public ITaskItem[] PayloadRemoveItems { get; set; } = [];
+
+    /// <summary>
     /// Gets or sets the parent package id.
     /// </summary>
     [Required]
@@ -49,9 +54,9 @@ public sealed class GeneratePayloadPackageAssetsTask : Microsoft.Build.Utilities
     {
         try
         {
-            if (PayloadContentItems.Length == 0)
+            if (PayloadContentItems.Length == 0 && PayloadRemoveItems.Length == 0)
             {
-                Log.LogMessage(MessageImportance.Low, "Payload: no authored PayloadContent items found for packing.");
+                Log.LogMessage(MessageImportance.Low, "Payload: no authored PayloadContent or PayloadRemove items found for packing.");
                 return true;
             }
 
@@ -93,7 +98,7 @@ public sealed class GeneratePayloadPackageAssetsTask : Microsoft.Build.Utilities
                 {
                     var relativePath = NormalizePath(Path.Combine(index.ToString("D4", CultureInfo.InvariantCulture), Path.GetFileName(sourcePath)));
                     packFiles.Add(CreatePackFile(sourcePath, relativePath));
-                    generatedEntries.Add(new GeneratedEntry(relativePath, tag, targetPath, copyOnBuild));
+                    generatedEntries.Add(new GeneratedEntry(index, relativePath, tag, copyOnBuild, ItemKind.Content, targetPath));
                     continue;
                 }
 
@@ -106,12 +111,35 @@ public sealed class GeneratePayloadPackageAssetsTask : Microsoft.Build.Utilities
                         packFiles.Add(CreatePackFile(filePath, childRelativePath));
                     }
 
-                    generatedEntries.Add(new GeneratedEntry(NormalizePath(relativeRoot), tag, targetPath, copyOnBuild));
+                    generatedEntries.Add(new GeneratedEntry(index, NormalizePath(relativeRoot), tag, copyOnBuild, ItemKind.Content, targetPath));
                     continue;
                 }
 
                 Log.LogError($"Payload: authored PayloadContent source '{item.ItemSpec}' does not exist.");
                 hasErrors = true;
+            }
+
+            for (var index = 0; index < PayloadRemoveItems.Length; index++)
+            {
+                var item = PayloadRemoveItems[index];
+                var tag = item.GetMetadata("Tag");
+                var removePath = item.ItemSpec;
+
+                if (string.IsNullOrWhiteSpace(tag))
+                {
+                    Log.LogError($"Payload: authored PayloadRemove item '{item.ItemSpec}' is missing Tag metadata.");
+                    hasErrors = true;
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(removePath))
+                {
+                    Log.LogError("Payload: authored PayloadRemove item is missing Include.");
+                    hasErrors = true;
+                    continue;
+                }
+
+                generatedEntries.Add(new GeneratedEntry(index, null, tag, null, ItemKind.Remove, removePath));
             }
 
             if (hasErrors)
@@ -128,7 +156,7 @@ public sealed class GeneratePayloadPackageAssetsTask : Microsoft.Build.Utilities
 
             Log.LogMessage(
                 wroteTargetsFile ? MessageImportance.High : MessageImportance.Low,
-                $"Payload: {(wroteTargetsFile ? "generated" : "reused")} '{outputFile}' with {generatedEntries.Count} PayloadContent item(s) and {PackFiles.Length} packaged file(s).");
+                $"Payload: {(wroteTargetsFile ? "generated" : "reused")} '{outputFile}' with {generatedEntries.Count} generated item(s) and {PackFiles.Length} packaged file(s).");
 
             return true;
         }
@@ -167,15 +195,25 @@ public sealed class GeneratePayloadPackageAssetsTask : Microsoft.Build.Utilities
 
         foreach (var entry in entries)
         {
-            builder.AppendLine($"    <PayloadContent Include=\"$({rootProperty}){Escape(entry.PackageRelativePath)}\">");
+            if (entry.Kind == ItemKind.Content)
+            {
+                builder.AppendLine($"    <PayloadContent Include=\"$({rootProperty}){Escape(entry.PackageRelativePath!)}\">");
+                builder.AppendLine($"      <PackageId>{Escape(packageId)}</PackageId>");
+                builder.AppendLine($"      <Tag>{Escape(entry.Tag)}</Tag>");
+                builder.AppendLine($"      <TargetPath>{Escape(entry.PathValue)}</TargetPath>");
+                if (!string.IsNullOrWhiteSpace(entry.CopyOnBuild))
+                {
+                    builder.AppendLine($"      <CopyOnBuild>{Escape(entry.CopyOnBuild!)}</CopyOnBuild>");
+                }
+
+                builder.AppendLine("    </PayloadContent>");
+                continue;
+            }
+
+            builder.AppendLine($"    <PayloadRemove Include=\"{Escape(entry.PathValue)}\">");
             builder.AppendLine($"      <PackageId>{Escape(packageId)}</PackageId>");
             builder.AppendLine($"      <Tag>{Escape(entry.Tag)}</Tag>");
-            builder.AppendLine($"      <TargetPath>{Escape(entry.TargetPath)}</TargetPath>");
-            if (!string.IsNullOrWhiteSpace(entry.CopyOnBuild))
-            {
-                builder.AppendLine($"      <CopyOnBuild>{Escape(entry.CopyOnBuild!)}</CopyOnBuild>");
-            }
-            builder.AppendLine("    </PayloadContent>");
+            builder.AppendLine("    </PayloadRemove>");
         }
 
         builder.AppendLine("  </ItemGroup>");
@@ -217,5 +255,11 @@ public sealed class GeneratePayloadPackageAssetsTask : Microsoft.Build.Utilities
     private static string Escape(string value)
         => SecurityElement.Escape(value) ?? string.Empty;
 
-    private sealed record GeneratedEntry(string PackageRelativePath, string Tag, string TargetPath, string? CopyOnBuild);
+    private sealed record GeneratedEntry(int Order, string? PackageRelativePath, string Tag, string? CopyOnBuild, ItemKind Kind, string PathValue);
+
+    private enum ItemKind
+    {
+        Content,
+        Remove
+    }
 }

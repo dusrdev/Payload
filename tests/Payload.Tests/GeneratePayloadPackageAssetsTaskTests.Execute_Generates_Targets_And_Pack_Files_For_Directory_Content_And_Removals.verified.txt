@@ -15,6 +15,10 @@
       <Tag>ExampleSkill</Tag>
       <TargetPath>.agents/skills/example-skill</TargetPath>
     </PayloadContent>
+    <PayloadRemove Include=".agents/skills/example-skill/obsolete.md">
+      <PackageId>ParentPackage</PackageId>
+      <Tag>ExampleSkill</Tag>
+    </PayloadRemove>
   </ItemGroup>
 </Project>
 

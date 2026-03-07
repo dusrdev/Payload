@@ -6,7 +6,7 @@ namespace Payload.Tests;
 public class GeneratePayloadPackageAssetsTaskTests
 {
     [Test]
-    public async Task Execute_Generates_Targets_And_Pack_Files_For_Directory_Content()
+    public async Task Execute_Generates_Targets_And_Pack_Files_For_Directory_Content_And_Removals()
     {
         using var temp = new TemporaryDirectory();
         var contentRoot = Path.Combine(temp.Path, "content", "skills", "example-skill");
@@ -23,6 +23,10 @@ public class GeneratePayloadPackageAssetsTaskTests
             PayloadContentItems =
             [
                 TestTaskItem.Create(contentRoot, ("Tag", "ExampleSkill"), ("TargetPath", ".agents/skills/example-skill"))
+            ],
+            PayloadRemoveItems =
+            [
+                TestTaskItem.Create(".agents/skills/example-skill/obsolete.md", ("Tag", "ExampleSkill"))
             ]
         };
 
@@ -66,6 +70,35 @@ public class GeneratePayloadPackageAssetsTaskTests
 
         await Assert.That(task.Execute()).IsTrue();
         await Assert.That(await File.ReadAllTextAsync(task.GeneratedTargetsFile)).Contains("<CopyOnBuild>false</CopyOnBuild>");
+    }
+
+    [Test]
+    public async Task Execute_Preserves_PayloadRemove_Items_In_Generated_Targets()
+    {
+        using var temp = new TemporaryDirectory();
+        var filePath = Path.Combine(temp.Path, "content", "README.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+        await File.WriteAllTextAsync(filePath, "hello");
+
+        var task = new GeneratePayloadPackageAssetsTask
+        {
+            BuildEngine = new RecordingBuildEngine(),
+            PackageId = "ParentPackage",
+            OutputPath = Path.Combine(temp.Path, "obj"),
+            PayloadContentItems =
+            [
+                TestTaskItem.Create(filePath, ("Tag", "Docs"), ("TargetPath", "docs/README.md"))
+            ],
+            PayloadRemoveItems =
+            [
+                TestTaskItem.Create("docs/OLD.md", ("Tag", "Docs"))
+            ]
+        };
+
+        await Assert.That(task.Execute()).IsTrue();
+        var targetsContent = await File.ReadAllTextAsync(task.GeneratedTargetsFile);
+        await Assert.That(targetsContent).Contains("<PayloadRemove Include=\"docs/OLD.md\">");
+        await Assert.That(targetsContent).Contains("<Tag>Docs</Tag>");
     }
 
     [Test]

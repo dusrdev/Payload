@@ -13,14 +13,16 @@
 
   <Target Name="Payload_GeneratePackageAssets"
           BeforeTargets="_GetPackageFiles"
-          Condition="'@(PayloadContent)' != ''">
+          Condition="'@(PayloadContent)' != '' or '@(PayloadRemove)' != ''">
     <ItemGroup>
       <_PayloadAuthoredContent Include="@(PayloadContent)" Condition="'%(PayloadContent.PackageId)' == ''" />
+      <_PayloadAuthoredRemovals Include="@(PayloadRemove)" Condition="'%(PayloadRemove.PackageId)' == ''" />
     </ItemGroup>
 
     <GeneratePayloadPackageAssetsTask
-      Condition="'@(_PayloadAuthoredContent)' != ''"
+      Condition="'@(_PayloadAuthoredContent)' != '' or '@(_PayloadAuthoredRemovals)' != ''"
       PayloadContentItems="@(_PayloadAuthoredContent)"
+      PayloadRemoveItems="@(_PayloadAuthoredRemovals)"
       PackageId="$(PackageId)"
       OutputPath="$(_PayloadGeneratedTargetsDir)">
       <Output TaskParameter="GeneratedTargetsFile" PropertyName="_PayloadGeneratedTargetsFile" />
@@ -48,16 +50,17 @@
 
   <Target Name="Payload_CopyContent"
           BeforeTargets="BeforeBuild"
-          Condition="'$(DesignTimeBuild)' != 'true' and '$(PayloadCopyEnabled)' == 'true' and '@(PayloadContent)' != ''">
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(PayloadCopyEnabled)' == 'true'">
     <ItemGroup>
       <_PayloadResolvedContent Include="@(PayloadContent)" Condition="'%(PayloadContent.PackageId)' != ''" />
+      <_PayloadResolvedRemovals Include="@(PayloadRemove)" Condition="'%(PayloadRemove.PackageId)' != ''" />
     </ItemGroup>
 
     <CopyRepoContentTask
-      Condition="'@(_PayloadResolvedContent)' != ''"
       ProjectDirectory="$(MSBuildProjectDirectory)"
       RootDirectory="$(PayloadRootDirectory)"
       PayloadContentItems="@(_PayloadResolvedContent)"
+      PayloadRemoveItems="@(_PayloadResolvedRemovals)"
       PayloadPolicies="@(PayloadPolicy)" />
   </Target>
 </Project>
