@@ -142,6 +142,20 @@ and a consumer can opt in explicitly:
                CopyOnBuild="true" />
 ```
 
+## Global Copy Kill Switch
+
+Consumers can disable all consumer-side Payload copying for a project with:
+
+```xml
+<PropertyGroup>
+  <PayloadCopyEnabled>false</PayloadCopyEnabled>
+</PropertyGroup>
+```
+
+This is a project-level kill switch. It prevents the consumer copy target from running, so no package-provided `PayloadContent` or `PayloadRemove` entries are processed for that build.
+
+Prefer `PayloadPolicy CopyOnBuild="false"` for normal opt-out behavior because it is scoped to one `PackageId + Tag` and preserves the rest of Payload's package behavior. Use `PayloadCopyEnabled=false` when a consumer needs to suppress Payload copying entirely, such as during troubleshooting or when a project should never synchronize any bundled payloads.
+
 ## File-Based Apps
 
 Payload also works with file-based apps that use `#:package`.
@@ -260,6 +274,8 @@ When copying is disabled with `CopyOnBuild="false"`, Payload remains conservativ
 - existing copied files are left in place
 - missing files are not restored
 - no explicit removals are executed
+
+When copying is disabled globally with `PayloadCopyEnabled=false`, the consumer copy target does not run at all. This is broader than `CopyOnBuild="false"` and affects every payload tag flowing into the project.
 
 ## Generated Package Layout
 
