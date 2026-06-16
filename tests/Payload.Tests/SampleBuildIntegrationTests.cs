@@ -6,6 +6,8 @@ namespace Payload.Tests;
 
 public class SampleBuildIntegrationTests
 {
+    private const string PayloadPackageVersion = "1.1.0";
+
     private const string TestStrongNameKeyBase64 =
         "BwIAAAAkAABSU0EyAAQAAAEAAQArmG9rXqVxfTXHLThWH0E+JnAp76m18Qe5Mx2D32VzgTJbOme3WBL2OpQ2zsy0lJTej1dPjmOdTSbA/Piw"
         + "6aGhlrgLb27QU2KNENAn4DLfLtHWCDXl9H0yye9toQ0DZqMZVzNiyCG1+PpavFuyIkHeb2Zqhdgta6jDCQ0BY2vSu20StxuABWomv4h9ZbW+"
@@ -64,7 +66,7 @@ public class SampleBuildIntegrationTests
             env);
         AssertSucceeded(payloadPack);
 
-        var nupkgPath = Path.Combine(workspace.RootPath, "src", "Payload", "bin", "Debug", "Payload.1.0.0.nupkg");
+        var nupkgPath = Path.Combine(workspace.RootPath, "src", "Payload", "bin", "Debug", $"Payload.{PayloadPackageVersion}.nupkg");
         using var package = ZipFile.OpenRead(nupkgPath);
         var taskLoadAssemblyEntries = package.Entries
             .Where(x => x.FullName.StartsWith("build/netstandard2.0/", StringComparison.OrdinalIgnoreCase)
@@ -111,6 +113,63 @@ public class SampleBuildIntegrationTests
 
         var copiedSkillPath = Path.Combine(workspace.RootPath, ".agents", "skills", "example-skill", "SKILL.md");
         await Assert.That(File.Exists(copiedSkillPath)).IsFalse();
+    }
+
+    [Test]
+    public async Task Sample_Flow_Respects_Global_Copy_Kill_Switch()
+    {
+        using var workspace = new TestWorkspace();
+        var consumerProjectPath = Path.Combine(workspace.RootPath, "tests", "ConsumerApp", "ConsumerApp.csproj");
+        var consumerProject = await File.ReadAllTextAsync(consumerProjectPath);
+        consumerProject = consumerProject.Replace(
+            "  <PropertyGroup>\n",
+            "  <PropertyGroup>\n    <PayloadCopyEnabled>false</PayloadCopyEnabled>\n",
+            StringComparison.Ordinal);
+        await File.WriteAllTextAsync(consumerProjectPath, consumerProject);
+
+        var env = CreateEnvironment(workspace);
+        await BuildFixturePackagesAsync(workspace.RootPath, env);
+
+        var consumerBuild = await DotnetCommand.RunAsync(["build", "tests/ConsumerApp/ConsumerApp.csproj", "-nologo", "-p:RestoreForce=true"], workspace.RootPath, env);
+        AssertSucceeded(consumerBuild);
+
+        var copiedSkillPath = Path.Combine(workspace.RootPath, ".agents", "skills", "example-skill", "SKILL.md");
+        await Assert.That(File.Exists(copiedSkillPath)).IsFalse();
+    }
+
+    [Test]
+    public async Task Sample_Flow_Parent_Global_Copy_Kill_Switch_Still_Generates_Package_Assets()
+    {
+        using var workspace = new TestWorkspace();
+        var parentProjectPath = Path.Combine(workspace.RootPath, "tests", "ParentPackage", "ParentPackage.csproj");
+        var parentProject = await File.ReadAllTextAsync(parentProjectPath);
+        parentProject = parentProject.Replace(
+            "  <PropertyGroup>\n",
+            "  <PropertyGroup>\n    <PayloadCopyEnabled>false</PayloadCopyEnabled>\n",
+            StringComparison.Ordinal);
+        await File.WriteAllTextAsync(parentProjectPath, parentProject);
+
+        var env = CreateEnvironment(workspace);
+        await BuildFixturePackagesAsync(workspace.RootPath, env);
+
+        var nupkgPath = Path.Combine(workspace.RootPath, "tests", "ParentPackage", "bin", "Debug", "ParentPackage.0.1.0-alpha.nupkg");
+        using (var package = ZipFile.OpenRead(nupkgPath))
+        {
+            var entries = package.Entries
+                .Select(x => NormalizePackageEntry(x.FullName))
+                .OrderBy(x => x)
+                .ToArray();
+
+            await Assert.That(entries).Contains("build/ParentPackage.targets");
+            await Assert.That(entries).Contains("buildTransitive/ParentPackage.targets");
+            await Assert.That(entries).Contains("payload/0000/SKILL.md");
+        }
+
+        var consumerBuild = await DotnetCommand.RunAsync(["build", "tests/ConsumerApp/ConsumerApp.csproj", "-nologo", "-p:RestoreForce=true"], workspace.RootPath, env);
+        AssertSucceeded(consumerBuild);
+
+        var copiedSkillPath = Path.Combine(workspace.RootPath, ".agents", "skills", "example-skill", "SKILL.md");
+        await Assert.That(File.Exists(copiedSkillPath)).IsTrue();
     }
 
     [Test]
