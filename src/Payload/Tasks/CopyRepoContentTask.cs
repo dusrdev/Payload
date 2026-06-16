@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
 using Microsoft.Build.Framework;
 using Payload.Internal;
-using Polyfills;
 
 namespace Payload.Tasks;
 
@@ -205,13 +204,13 @@ public sealed class CopyRepoContentTask : Microsoft.Build.Utilities.Task
             var key = (packageId, tag);
             if (!map.TryGetValue(key, out var state))
             {
-                map[key] = new ParentCopyOnBuildState(rawCopyOnBuild, HasConflict: false);
+                map[key] = new ParentCopyOnBuildState(rawCopyOnBuild, false);
                 continue;
             }
 
             if (!string.Equals(state.RawValue, rawCopyOnBuild, StringComparison.OrdinalIgnoreCase))
             {
-                map[key] = state with { HasConflict = true };
+                map[key] = new ParentCopyOnBuildState(state.RawValue, true);
             }
         }
     }
@@ -412,7 +411,7 @@ public sealed class CopyRepoContentTask : Microsoft.Build.Utilities.Task
     {
         foreach (var sourceFilePath in Directory.EnumerateFiles(sourceDirectoryPath, "*", SearchOption.AllDirectories))
         {
-            var relativePath = Polyfill.GetRelativePath(sourceDirectoryPath, sourceFilePath);
+            var relativePath = Helper.GetRelativePath(sourceDirectoryPath, sourceFilePath);
             var destinationFilePath = Path.Combine(destinationDirectoryPath, relativePath);
 
             EnsureParentDirectory(destinationFilePath);
@@ -514,10 +513,19 @@ public sealed class CopyRepoContentTask : Microsoft.Build.Utilities.Task
                ^ StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Tag);
     }
 
-    private sealed record ParentCopyOnBuildState(string RawValue, bool HasConflict);
-
-    private sealed record TagExecutionPlan(string PackageId, string Tag, bool CanExecute, string? DestinationBasePath)
+    private sealed class ParentCopyOnBuildState(string rawValue, bool hasConflict)
     {
+        public string RawValue { get; } = rawValue;
+        public bool HasConflict { get; } = hasConflict;
+    }
+
+    private sealed class TagExecutionPlan(string packageId, string tag, bool canExecute, string? destinationBasePath)
+    {
+        public string PackageId { get; } = packageId;
+        public string Tag { get; } = tag;
+        public bool CanExecute { get; } = canExecute;
+        public string? DestinationBasePath { get; } = destinationBasePath;
+
         public static TagExecutionPlan Enabled(string packageId, string tag, string destinationBasePath)
             => new(packageId, tag, true, destinationBasePath);
 

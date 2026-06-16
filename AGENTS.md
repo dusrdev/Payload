@@ -25,7 +25,9 @@ These are not open questions unless explicitly changed.
 
 ### Data model
 
-Use `ItemGroup`, not `PropertyGroup`.
+Use `ItemGroup`, not `PropertyGroup`, for package-authored payload declarations and consumer tag-level policy.
+
+The intentional exception is `PayloadCopyEnabled`, a project-level property that disables all consumer-side copy work.
 
 Parent package authoring item shape:
 
@@ -60,6 +62,14 @@ The item `Include` is the `PackageId`.
 
 Consumer policies are scoped by `PackageId + Tag` if practical to implement without too much complexity.
 
+Global consumer kill switch shape:
+
+- property name: `PayloadCopyEnabled`
+- `false` disables consumer-side payload copying for the whole project
+- default is `true`
+
+`PayloadCopyEnabled` is broader than `PayloadPolicy`. Prefer `PayloadPolicy` for normal per-tag opt-out behavior.
+
 ### Grouping and atomicity
 
 There is only one grouping key: `Tag`.
@@ -92,6 +102,15 @@ When effective `CopyOnBuild` is `false`:
 - do not overwrite existing files
 
 This is intentionally conservative so disabling does not destroy consumer files.
+
+When `PayloadCopyEnabled` is `false`:
+
+- disable all consumer-side payload copying for the project
+- do not execute any package-provided `PayloadContent`
+- do not execute any package-provided `PayloadRemove`
+- do not affect parent package asset generation during pack
+
+This is a global kill switch, not a replacement for normal tag-level policy.
 
 ### Root detection
 
@@ -198,6 +217,8 @@ The shared build package should contain:
 - helper logic for file enumeration and copy decisions
 - explicit file removal support through `PayloadRemove`
 
+`CopyRepoContentTask` registration is conditional on `PayloadCopyEnabled == true` so the global kill switch avoids registering the consumer copy task. `GeneratePayloadPackageAssetsTask` remains unconditioned so parent packages can still generate package assets even if `PayloadCopyEnabled` is set to `false`.
+
 ### Parent package responsibilities
 
 A parent package that references the shared build package should:
@@ -230,16 +251,24 @@ Or override the destination base path for a tag:
 </ItemGroup>
 ```
 
+Or disable all consumer-side copying for a project:
+
+```xml
+<PropertyGroup>
+  <PayloadCopyEnabled>false</PayloadCopyEnabled>
+</PropertyGroup>
+```
+
 For file-based apps that use `#:package`, `Payload` still runs, but consumer-side `PayloadPolicy` should be declared in a sidecar `Directory.Build.targets` file because the `.cs` file does not provide an `ItemGroup` surface.
 
-## Immediate implementation priorities
+## Current maintenance priorities
 
-1. get the XML contract stable
-2. implement root detection
-3. implement recursive file enumeration
-4. implement SHA-256-based copy decision
-5. implement consumer policy matching
-6. wire everything through a `buildTransitive` target
+1. keep the XML contract stable
+2. preserve root detection behavior
+3. preserve recursive file enumeration
+4. preserve SHA-256-based copy decisions
+5. preserve consumer policy matching
+6. keep `build` and `buildTransitive` target behavior aligned
 7. keep the sample package and sample consumer simple and honest
 
 ## Remaining backlog

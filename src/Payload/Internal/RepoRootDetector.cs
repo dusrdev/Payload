@@ -92,8 +92,12 @@ internal static class RepoRootDetector
         SearchPattern
     }
 
-    private sealed record MarkerProbe(string Value, int Priority, MarkerMatchMode Mode)
+    private sealed class MarkerProbe(string value, int priority, MarkerMatchMode mode)
     {
+        public string Value { get; } = value;
+        public int Priority { get; } = priority;
+        public MarkerMatchMode Mode { get; } = mode;
+
         public bool IsMatch(string directoryPath)
             => Mode == MarkerMatchMode.Path
                 ? Directory.Exists(Path.Combine(directoryPath, Value)) || File.Exists(Path.Combine(directoryPath, Value))

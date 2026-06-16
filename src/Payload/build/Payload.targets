@@ -1,7 +1,8 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <UsingTask
     TaskName="Payload.Tasks.CopyRepoContentTask"
-    AssemblyFile="$(MSBuildThisFileDirectory)netstandard2.0\Payload.dll" />
+    AssemblyFile="$(MSBuildThisFileDirectory)netstandard2.0\Payload.dll"
+    Condition="'$(PayloadCopyEnabled)' == 'true'" />
 
   <UsingTask
     TaskName="Payload.Tasks.GeneratePayloadPackageAssetsTask"

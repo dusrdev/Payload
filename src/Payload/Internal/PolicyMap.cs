@@ -79,5 +79,10 @@ internal sealed class PolicyMap
                ^ StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Tag);
     }
 
-    private sealed record PolicyState(bool? CopyOnBuild, string? RawCopyOnBuild, string? OverridePath);
+    private sealed class PolicyState(bool? copyOnBuild, string? rawCopyOnBuild, string? overridePath)
+    {
+        public bool? CopyOnBuild { get; } = copyOnBuild;
+        public string? RawCopyOnBuild { get; } = rawCopyOnBuild;
+        public string? OverridePath { get; } = overridePath;
+    }
 }
