@@ -3,7 +3,7 @@ using System.Security;
 using System.Text;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
-using Polyfills;
+using Payload.Internal;
 
 namespace Payload.Tasks;
 
@@ -140,7 +140,7 @@ public sealed class GeneratePayloadPackageAssetsTask : Microsoft.Build.Utilities
             var relativeRoot = index.ToString("D4", CultureInfo.InvariantCulture);
             foreach (var filePath in Directory.EnumerateFiles(sourcePath, "*", SearchOption.AllDirectories))
             {
-                var childRelativePath = NormalizePath(Path.Combine(relativeRoot, Polyfill.GetRelativePath(sourcePath, filePath)));
+                var childRelativePath = NormalizePath(Path.Combine(relativeRoot, Helper.GetRelativePath(sourcePath, filePath)));
                 packFiles.Add(CreatePackFile(filePath, childRelativePath));
             }
 
@@ -256,8 +256,13 @@ public sealed class GeneratePayloadPackageAssetsTask : Microsoft.Build.Utilities
     private static string Escape(string value)
         => SecurityElement.Escape(value) ?? string.Empty;
 
-    private sealed record GeneratedEntry(string ItemName, string Tag, string? PackageRelativePath, IReadOnlyList<EntryMetadata> Metadata)
+    private sealed class GeneratedEntry(string itemName, string tag, string? packageRelativePath, IReadOnlyList<EntryMetadata> metadata)
     {
+        public string ItemName { get; } = itemName;
+        public string Tag { get; } = tag;
+        public string? PackageRelativePath { get; } = packageRelativePath;
+        public IReadOnlyList<EntryMetadata> Metadata { get; } = metadata;
+
         public static GeneratedEntry CreateContent(string packageRelativePath, string tag, string targetPath, string? copyOnBuild)
         {
             var metadata = new List<EntryMetadata>
@@ -291,5 +296,9 @@ public sealed class GeneratePayloadPackageAssetsTask : Microsoft.Build.Utilities
                 : PackageRelativePath ?? string.Empty;
     }
 
-    private sealed record EntryMetadata(string Name, string Value);
+    private sealed class EntryMetadata(string name, string value)
+    {
+        public string Name { get; } = name;
+        public string Value { get; } = value;
+    }
 }

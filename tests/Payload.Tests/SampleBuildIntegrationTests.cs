@@ -1,10 +1,21 @@
 using System.IO.Compression;
+using System.Reflection;
 using Payload.Tests.TestSupport;
 
 namespace Payload.Tests;
 
 public class SampleBuildIntegrationTests
 {
+    private const string TestStrongNameKeyBase64 =
+        "BwIAAAAkAABSU0EyAAQAAAEAAQArmG9rXqVxfTXHLThWH0E+JnAp76m18Qe5Mx2D32VzgTJbOme3WBL2OpQ2zsy0lJTej1dPjmOdTSbA/Piw"
+        + "6aGhlrgLb27QU2KNENAn4DLfLtHWCDXl9H0yye9toQ0DZqMZVzNiyCG1+PpavFuyIkHeb2Zqhdgta6jDCQ0BY2vSu20StxuABWomv4h9ZbW+"
+        + "whBzp70hVbuH1AcAK3HDTZmfLEOg1VMcLiTzc0bZFyq/p61FmcdlLagFoQMZV6mTsuf3dUVXtmXU76mM1xyZuadNNB4y4960rOa6r9suJKfUwe"
+        + "LHZRz1Owy6zPR1Nqm7je2RvpJmzLBJE9oN9Wilt4XPPSA8yTQw81kk+IJ4fNb9QDndauNKeteUYL8FzX1aIKY9NcJsGDehBUMVMvFGI0I12aUz"
+        + "248B9ngSFaivgvfc2GOYv3RNqMp1xApQtJjcL7S3klHTMdleZTYK8zCQh5WoqyX30dQ2BLYk7e/HJDa4FZU1VmcITGDF8qGcpxKp+VhAfFIPdP"
+        + "0y3xu/IXrP10xOBONoR2OatKClkmHpCQzzmCFnZe0mUsXOgg/gVFNzKH5wjY0BKUTF17/cdWHIv5pY6U9GpDwrNoz1VZyQ5dj/DDUNH9QnW6Rj"
+        + "p1c9RZLFLwwExVwCue+CGh6CEVFTBVVmn16U9OaOkxUFLp5wlOdAsII5rDwxxT9jpPkCGMkjQ3ue6zUOyGUIVNJmf8slILQTv2m8la1XsPhTAB"
+        + "jh6Ge5AUK7uEpD8tYpXCDee3qEtQY=";
+
     [Test]
     public async Task Sample_Flow_Packs_And_Copies_Content_End_To_End()
     {
@@ -29,6 +40,57 @@ public class SampleBuildIntegrationTests
 
         var copiedSkillPath = Path.Combine(workspace.RootPath, ".agents", "skills", "example-skill", "SKILL.md");
         await Assert.That(File.Exists(copiedSkillPath)).IsTrue();
+    }
+
+    [Test]
+    public async Task Payload_Package_Ships_Only_StrongNamed_TaskLoad_Assemblies()
+    {
+        using var workspace = new TestWorkspace();
+        var env = CreateEnvironment(workspace);
+        var strongNameKeyPath = Path.Combine(workspace.RootPath, "Payload.Tests.snk");
+        await File.WriteAllBytesAsync(strongNameKeyPath, Convert.FromBase64String(TestStrongNameKeyBase64));
+
+        var payloadPack = await DotnetCommand.RunAsync(
+            [
+                "pack",
+                "src/Payload/Payload.csproj",
+                "-nologo",
+                "-c",
+                "Debug",
+                "-p:SignAssembly=true",
+                $"-p:AssemblyOriginatorKeyFile={strongNameKeyPath}"
+            ],
+            workspace.RootPath,
+            env);
+        AssertSucceeded(payloadPack);
+
+        var nupkgPath = Path.Combine(workspace.RootPath, "src", "Payload", "bin", "Debug", "Payload.1.0.0.nupkg");
+        using var package = ZipFile.OpenRead(nupkgPath);
+        var taskLoadAssemblyEntries = package.Entries
+            .Where(x => x.FullName.StartsWith("build/netstandard2.0/", StringComparison.OrdinalIgnoreCase)
+                        && x.FullName.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(x => x.FullName, StringComparer.Ordinal)
+            .ToArray();
+
+        await Assert.That(taskLoadAssemblyEntries.Length > 0).IsTrue();
+
+        var extractionDirectory = Path.Combine(workspace.RootPath, "task-load-assemblies");
+        var unsignedAssemblies = new List<string>();
+
+        foreach (var entry in taskLoadAssemblyEntries)
+        {
+            var assemblyPath = Path.Combine(extractionDirectory, Path.GetFileName(entry.FullName));
+            Directory.CreateDirectory(Path.GetDirectoryName(assemblyPath)!);
+            entry.ExtractToFile(assemblyPath, overwrite: true);
+
+            var publicKeyToken = AssemblyName.GetAssemblyName(assemblyPath).GetPublicKeyToken();
+            if (publicKeyToken is null || publicKeyToken.Length == 0)
+            {
+                unsignedAssemblies.Add(entry.FullName);
+            }
+        }
+
+        await Assert.That(string.Join(", ", unsignedAssemblies)).IsEqualTo(string.Empty);
     }
 
     [Test]
